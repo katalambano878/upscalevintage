@@ -136,11 +136,11 @@ export default function ContactPage() {
   const faqs = [
     {
       question: 'What are your delivery times?',
-      answer: 'Standard delivery takes 2-5 business days within Ghana. Express delivery is available for Accra and Kumasi. We ship dresses, electronics, bags, shoes and all other items with care.'
+      answer: 'Standard delivery takes 2-5 business days within Ghana. Express delivery is available for Accra and Kumasi. We ship perfumes and fragrances with care.'
     },
     {
       question: 'Do you offer international shipping?',
-      answer: 'Currently, we ship within Ghana only. Many of our products are imported from China, so we handle all international logistics on our end. You simply order and receive.'
+      answer: 'Currently, we ship within Ghana only. We handle all logistics so you simply order and receive your perfumes.'
     },
     {
       question: 'What payment methods do you accept?',

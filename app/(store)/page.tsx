@@ -8,13 +8,12 @@ import ProductCard, { type ColorVariant, getColorHex } from '@/components/Produc
 import ProductCardSkeleton from '@/components/skeletons/ProductCardSkeleton';
 import AnimatedSection, { AnimatedGrid } from '@/components/AnimatedSection';
 import NewsletterSection from '@/components/NewsletterSection';
-import WhoWeAreSection from '@/components/WhoWeAreSection';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 export default function Home() {
   usePageTitle('');
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+
   const [loading, setLoading] = useState(true);
 
   // Config State - Managed in Code
@@ -40,8 +39,8 @@ export default function Home() {
     banners?: Array<{ text: string; active: boolean }>;
   } = {
     hero: {
-      headline: 'Dresses, Electronics, Bags & Shoes — Everything You Need, One Store',
-      subheadline: 'Quality products locally sourced and imported directly from China. Unbeatable prices for individuals and resellers across Ghana.',
+      headline: 'TIWAA PERFUME STYLE HOUSE — Perfumes Wholesale & Retail',
+      subheadline: 'Curated fragrances at competitive prices. Satellite, Accra. For resellers and individual customers across Ghana.',
       primaryButtonText: 'Shop Collections',
       primaryButtonLink: '/shop',
       secondaryButtonText: 'Our Story',
@@ -70,26 +69,12 @@ export default function Home() {
         if (productsError) throw productsError;
         setFeaturedProducts(productsData || []);
 
-        // Fetch featured categories (featured is stored in metadata JSONB)
-        const { data: categoriesData, error: categoriesError } = await supabase
-          .from('categories')
-          .select('id, name, slug, image_url, metadata')
-          .eq('status', 'active')
-          .order('name');
-
-        if (categoriesError) throw categoriesError;
-
-        // Filter by metadata.featured = true on client side
-        const featuredCategories = (categoriesData || []).filter(
-          (cat: any) => cat.metadata?.featured === true
-        );
-        setCategories(featuredCategories);
       } catch (error: unknown) {
         const err = error as { message?: string; code?: string };
         const msg = err?.message ?? (error instanceof Error ? error.message : String(error));
         const code = err?.code ?? '';
         if (code === 'PGRST205') {
-          console.warn('Products/categories tables not found. Run Supabase migrations to create the schema.');
+          console.warn('Products table not found. Run Supabase migrations to create the schema.');
         } else {
           console.error('Error fetching data:', msg, code ? `(${code})` : '');
         }
@@ -256,58 +241,133 @@ export default function Home() {
 
       </section>
 
-      {/* Categories Section */}
-      <section className="py-12 md:py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <AnimatedSection className="flex items-end justify-between mb-12">
-            <div>
-              <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl text-gray-900 mb-4">Shop by Category</h2>
-              <p className="text-gray-600 text-lg max-w-md">From dresses to electronics, bags to shoes</p>
+      {/* Categories Section - God Level Redesign */}
+      <section className="py-20 md:py-32 bg-white relative overflow-hidden">
+        {/* Decorative Background Element */}
+        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
+
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
+          <AnimatedSection className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+            <div className="relative">
+              <span className="block text-sm font-medium tracking-[0.2em] text-gray-500 mb-3 uppercase">Olfactory Families</span>
+              <h2 className="font-serif text-4xl sm:text-5xl md:text-6xl text-gray-900 leading-[1.1]">
+                Shop by <span className="italic text-gray-400">Category</span>
+              </h2>
             </div>
-            <Link href="/categories" className="hidden md:flex items-center text-blue-800 font-medium hover:text-blue-900 transition-colors">
-              View All <i className="ri-arrow-right-line ml-2"></i>
-            </Link>
+            <div className="flex items-center gap-6">
+              <p className="hidden md:block text-gray-500 max-w-xs text-right font-light leading-relaxed">
+                Explore our curated collection of fragrances, categorized by their dominant notes.
+              </p>
+              <Link href="/categories" className="group flex items-center justify-center w-14 h-14 rounded-full border border-gray-200 hover:border-gray-900 hover:bg-gray-900 hover:text-white transition-all duration-300">
+                <i className="ri-arrow-right-line text-xl transition-transform group-hover:translate-x-1"></i>
+              </Link>
+            </div>
           </AnimatedSection>
 
-          <AnimatedGrid className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-            {categories.map((category) => (
-              <Link href={`/shop?category=${category.slug}`} key={category.id} className="group cursor-pointer block relative">
-                <div className="aspect-[3/4] rounded-2xl overflow-hidden relative shadow-md group-hover:shadow-xl transition-all duration-300">
-                  <Image
-                    src={category.image || category.image_url || 'https://via.placeholder.com/600x800?text=' + encodeURIComponent(category.name)}
-                    alt={category.name}
-                    fill
-                    className="object-cover transition-transform duration-700 group-hover:scale-110"
-                    sizes="(max-width: 768px) 50vw, 25vw"
-                    quality={75}
-                  />
-                  {/* Gradient Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300"></div>
+          <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
+            {[
+              {
+                id: 'fresh',
+                name: 'Fresh',
+                subtitle: 'Cool, Clean, Airy',
+                slug: 'fresh',
+                image: '/Whisk_4e28dc6bf0d6be98458435c0c2950e3ddr.jpeg',
+                tint: 'bg-blue-900'
+              },
+              {
+                id: 'floral',
+                name: 'Floral',
+                subtitle: 'Romantic, Soft, Elegant',
+                slug: 'floral',
+                image: '/Whisk_50c2f050b440b4b95064c372c1ec7ee1dr.jpeg',
+                tint: 'bg-rose-900'
+              },
+              {
+                id: 'oriental',
+                name: 'Oriental',
+                display_name: 'Oriental (Amber)',
+                subtitle: 'Warm, Opulent, Spicy',
+                slug: 'oriental-amber',
+                image: '/Whisk_64e2698834d1476801a4b505b30c324bdr.jpeg',
+                tint: 'bg-amber-900'
+              },
+              {
+                id: 'woody',
+                name: 'Woody',
+                subtitle: 'Earthy, Refined, Natural',
+                slug: 'woody',
+                image: '/Whisk_6ec7df94ec3ca85b49644810b7fab2ecdr.jpeg',
+                tint: 'bg-stone-900'
+              }
+            ].map((category) => (
+              <Link href={`/shop?category=${category.slug}`} key={category.id} className="group block h-full w-full">
+                <div className="relative aspect-[3/4] overflow-hidden isolate bg-gray-900 shadow-2xl rounded-3xl">
 
-                  {/* Content */}
-                  <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col justify-end h-full">
-                    <h3 className="font-serif font-bold text-white text-xl md:text-2xl mb-1 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">{category.name}</h3>
-                    <div className="flex items-center text-white/90 text-sm font-medium opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0 delay-75">
-                      <span className="uppercase tracking-wider text-xs">Shop Now</span>
-                      <i className="ri-arrow-right-line ml-2 transition-transform group-hover:translate-x-1"></i>
+                  {/* Image: Cinematic Slow Zoom & Brightness Shift */}
+                  <div className="absolute inset-0 transition-transform duration-[1500ms] ease-out group-hover:scale-110 opacity-90 group-hover:opacity-100">
+                    <Image
+                      src={category.image}
+                      alt={category.name}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                    />
+                  </div>
+
+                  {/* Cinematic Grading Overlays */}
+                  {/* 1. Base Darkening Gradient (Bottom Up) */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 transition-opacity duration-700 group-hover:opacity-90"></div>
+
+                  {/* 2. Color Tint Overlay (Mix Blend) */}
+                  <div className={`absolute inset-0 ${category.tint} mix-blend-overlay opacity-40 transition-opacity duration-700 group-hover:opacity-50`}></div>
+
+                  {/* 3. Top Down Vignette for depth */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-transparent opacity-60"></div>
+
+                  {/* Content Container */}
+                  <div className="absolute inset-0 p-8 flex flex-col justify-end z-10">
+
+                    {/* Floating 'Explore' Tag - Reveals on Hover */}
+                    <div className="absolute top-8 right-8 overflow-hidden">
+                      <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 backdrop-blur-md text-[10px] font-bold text-white tracking-widest uppercase transform translate-y-[-150%] opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100">
+                        Explore <i className="ri-arrow-right-line"></i>
+                      </span>
+                    </div>
+
+                    {/* Category Title */}
+                    <div className="overflow-hidden">
+                      <h3 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white leading-[0.9] mb-3 transform transition-transform duration-700 ease-out group-hover:-translate-y-2 drop-shadow-xl">
+                        {category.display_name || category.name}
+                      </h3>
+                    </div>
+
+                    {/* Decorative Line */}
+                    <div className="h-[1px] w-12 bg-white/60 mb-4 transition-all duration-700 ease-out group-hover:w-full group-hover:bg-white/90"></div>
+
+                    {/* Subtitle / Description */}
+                    <div className="overflow-hidden">
+                      <p className="text-white/80 font-light text-sm tracking-widest uppercase transform translate-y-full opacity-0 transition-all duration-700 ease-out group-hover:translate-y-0 group-hover:opacity-100 delay-100">
+                        {category.subtitle}
+                      </p>
                     </div>
                   </div>
+
+                  {/* Premium Border Frame Effect */}
+                  <div className="absolute inset-5 border border-white/20 scale-[0.95] opacity-0 transition-all duration-700 ease-out group-hover:scale-100 group-hover:opacity-100 pointer-events-none z-20">
+                    {/* Corner Accents */}
+                    <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-white/60"></div>
+                    <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-white/60"></div>
+                    <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-white/60"></div>
+                    <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-white/60"></div>
+                  </div>
+
                 </div>
               </Link>
             ))}
           </AnimatedGrid>
-
-          <div className="mt-8 text-center md:hidden">
-            <Link href="/categories" className="inline-flex items-center text-blue-800 font-medium hover:text-blue-900 transition-colors">
-              View All <i className="ri-arrow-right-line ml-2"></i>
-            </Link>
-          </div>
         </div>
       </section>
 
-
-      {/* Who We Are */}
-      <WhoWeAreSection />
 
       {/* Featured Products */}
       <section className="py-16 md:py-24 bg-stone-50">

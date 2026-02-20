@@ -17,22 +17,22 @@ export default function AboutPage() {
     {
       icon: 'ri-verified-badge-line',
       title: 'Verified Quality',
-      description: 'Every product is personally inspected before it reaches you. Whether sourced locally or imported from China, quality comes first.'
+      description: 'Every perfume is personally inspected before it reaches you. We focus on authentic fragrances and quality you can trust.'
     },
     {
       icon: 'ri-money-dollar-circle-line',
       title: 'Unbeatable Prices',
-      description: 'By sourcing directly from manufacturers and local suppliers, we cut out the middleman and pass the savings to you.'
+      description: 'Competitive wholesale and retail prices. We pass the savings to resellers and individual customers.'
     },
     {
       icon: 'ri-global-line',
-      title: 'Local & Imported',
-      description: 'The best of both worlds — handpicked local products alongside carefully selected imports from trusted Chinese suppliers.'
+      title: 'Curated Fragrances',
+      description: 'A handpicked range of perfumes for every taste. Genuine products at great prices.'
     },
     {
       icon: 'ri-truck-line',
       title: 'Nationwide Delivery',
-      description: 'Fast and reliable delivery across Ghana. Based in Accra, we ship to every region with care and speed.'
+      description: 'Fast and reliable delivery across Ghana. Based in Satellite, Accra, we ship with care and speed.'
     }
   ];
 
@@ -44,7 +44,55 @@ export default function AboutPage() {
         backgroundImage="/Whisk_743db4f33bd7ec08b0f46aec28e929cfdr.jpeg"
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+      {/* Who We Are - Hero section */}
+      <section className="py-20 bg-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-serif text-gray-900 mb-6">Who We Are</h2>
+              <div className="space-y-4 text-lg text-gray-600 leading-relaxed">
+                <p>
+                  <strong>TIWAA PERFUME STYLE HOUSE</strong> is your premier destination for perfumes, both wholesale and retail. Based in Satellite, Accra, we offer a curated range of fragrances at competitive prices for resellers and individual customers.
+                </p>
+                <p>
+                  We focus on quality and value. Whether you're stocking up for your business or shopping for yourself, we handpick our perfumes to deliver genuine products and great prices.
+                </p>
+                <div className="pt-4">
+                  <Link
+                    href="#our-story"
+                    className="inline-flex items-center text-blue-800 font-medium hover:text-blue-900 transition-colors group"
+                  >
+                    <span className="border-b border-transparent group-hover:border-blue-900 transition-colors">Read Our Full Story</span>
+                    <i className="ri-arrow-right-line ml-2 transition-transform group-hover:translate-x-1"></i>
+                  </Link>
+                </div>
+              </div>
+            </div>
+            <div className="relative">
+              <div className="aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl relative">
+                <img
+                  src="/Whisk_743db4f33bd7ec08b0f46aec28e929cfdr.jpeg"
+                  alt="TIWAA PERFUME STYLE HOUSE — Premium perfumes"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="absolute -bottom-6 -left-6 bg-white p-6 rounded-xl shadow-xl max-w-xs border border-gray-100">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-700">
+                    <i className="ri-medal-line text-xl"></i>
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-900">Premium Quality</p>
+                    <p className="text-sm text-gray-500">Authentic Fragrances</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div id="our-story" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="flex border-b border-gray-200 mb-12 justify-center">
           <button
             onClick={() => setActiveTab('story')}

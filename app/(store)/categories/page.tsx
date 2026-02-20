@@ -44,7 +44,7 @@ export default async function CategoriesPage() {
     <div className="min-h-screen bg-white">
       <PageHero
         title="Shop by Category"
-        subtitle="Browse dresses, electronics, bags, shoes and everything in between"
+        subtitle="Browse our perfume categories"
         backgroundImage="/Whisk_6f28ce8873000718f834bc0d63e3bc87dr.jpeg"
       />
 

@@ -39,7 +39,7 @@ export default function WhoWeAreSection() {
             <div className="aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl relative group">
               <Image
                 src="/Whisk_743db4f33bd7ec08b0f46aec28e929cfdr.jpeg"
-                alt="TIWAA PERFUME STYLE HOUSE Interior"
+                alt="TIWAA PERFUME STYLE HOUSE — Premium perfumes"
                 fill
                 className="object-cover transition-transform duration-700 group-hover:scale-105"
                 sizes="(max-width: 768px) 100vw, 50vw"
