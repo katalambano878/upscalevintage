@@ -1,16 +1,22 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getPublicSupabaseCredentials, isSupabaseConfigured } from '@/lib/supabase-config';
 
-// Server-side Supabase client (no auth needed for public data)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+function getSupabase() {
+    const { url, anonKey } = getPublicSupabaseCredentials();
+    return createClient(url, anonKey);
+}
 
 // Simple in-memory cache
 let cache: { data: any; timestamp: number } | null = null;
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes — products don't change frequently
 
 export async function GET(request: Request) {
+    if (!isSupabaseConfigured()) {
+        return NextResponse.json([]);
+    }
+
+    const supabase = getSupabase();
     const { searchParams } = new URL(request.url);
     const featured = searchParams.get('featured') === 'true';
     const limit = parseInt(searchParams.get('limit') || '50');

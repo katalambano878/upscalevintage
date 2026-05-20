@@ -1,8 +1,12 @@
+# Upscale Vintage — https://upscalevintage.com
 User-agent: *
 Allow: /
 Disallow: /admin/
 Disallow: /account/
 Disallow: /checkout/
+Disallow: /cart
+Disallow: /wishlist
 Disallow: /api/
+Disallow: /pay/
 
-Sitemap: https://premiumshop.com/sitemap.xml
+Sitemap: https://upscalevintage.com/sitemap.xml

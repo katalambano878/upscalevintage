@@ -281,7 +281,7 @@ export default function PrivacyPage() {
             </div>
 
             <p className="text-gray-600 leading-relaxed">
-              To exercise any of these rights, please contact us at <a href="mailto:tiwaperfumestyle@gmail.com" className="text-blue-700 font-medium hover:underline">tiwaperfumestyle@gmail.com</a> or through your account settings. We will respond within 30 days.
+              To exercise any of these rights, please contact us at <a href="mailto:your@email.com" className="text-blue-700 font-medium hover:underline">your@email.com</a> or through your account settings. We will respond within 30 days.
             </p>
           </section>
 
@@ -384,7 +384,7 @@ export default function PrivacyPage() {
                   <i className="ri-mail-line text-blue-700 text-xl mt-1"></i>
                   <div>
                     <p className="font-medium text-gray-900">Email</p>
-                    <a href="mailto:tiwaperfumestyle@gmail.com" className="text-blue-700 hover:underline">tiwaperfumestyle@gmail.com</a>
+                    <a href="mailto:your@email.com" className="text-blue-700 hover:underline">your@email.com</a>
                   </div>
                 </div>
 
@@ -392,7 +392,7 @@ export default function PrivacyPage() {
                   <i className="ri-phone-line text-blue-700 text-xl mt-1"></i>
                   <div>
                     <p className="font-medium text-gray-900">Phone</p>
-                    <a href="tel:+233545010949" className="text-blue-700 hover:underline">054 501 0949</a> · WhatsApp <a href="https://wa.me/233554169992" className="text-blue-700 hover:underline">055 416 9992</a>
+                    <a href="tel:YOUR_PHONE" className="text-blue-700 hover:underline">YOUR_PHONE</a> · WhatsApp <a href="https://wa.me/YOUR_WHATSAPP_NUMBER" className="text-blue-700 hover:underline">YOUR_WHATSAPP</a>
                   </div>
                 </div>
 
@@ -400,7 +400,7 @@ export default function PrivacyPage() {
                   <i className="ri-map-pin-line text-blue-700 text-xl mt-1"></i>
                   <div>
                     <p className="font-medium text-gray-900">Address</p>
-                    <p className="text-gray-600">TIWAA PERFUME STYLE HOUSE<br />Satellite, Accra</p>
+                    <p className="text-gray-600">YOUR_APP_TITLE<br />YOUR_ADDRESS</p>
                   </div>
                 </div>
               </div>

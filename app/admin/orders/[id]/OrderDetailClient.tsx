@@ -284,7 +284,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
           {/* Header */}
           <div className="flex justify-between items-start border-b-2 border-gray-800 pb-4 mb-4">
             <div>
-              <h1 className="text-2xl font-bold">TIWAA PERFUME STYLE HOUSE</h1>
+              <h1 className="text-2xl font-bold">YOUR_APP_TITLE</h1>
               <p className="text-sm text-gray-600">Order Packing Slip</p>
             </div>
             <div className="text-right">
@@ -345,8 +345,8 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
           {/* Footer */}
           <div className="border-t-2 border-gray-800 pt-4 text-center text-sm text-gray-600">
-            <p>Thank you for shopping with TIWAA PERFUME STYLE HOUSE!</p>
-            <p>Questions? Call 054 501 0949 or WhatsApp 055 416 9992 · tiwaperfumestyle@gmail.com</p>
+            <p>Thank you for shopping with YOUR_APP_TITLE!</p>
+            <p>Questions? Call YOUR_PHONE or WhatsApp YOUR_WHATSAPP · your@email.com</p>
           </div>
         </div>
       </div>

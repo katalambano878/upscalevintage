@@ -129,12 +129,14 @@ export async function POST(request: Request) {
         // contact — public but strictly validated and rate-limited
         // ============================================================
         if (type === 'contact') {
-            const { name, email, subject, message } = payload;
-            if (!name || !email || !subject || !message) {
+            const { name, email, phone, subject, message } = payload;
+            if (!name || !subject || !message) {
                 return NextResponse.json({ error: 'All contact fields required' }, { status: 400 });
             }
-            // Basic email format check
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            if (!email && !phone) {
+                return NextResponse.json({ error: 'Phone or email required' }, { status: 400 });
+            }
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                 return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
             }
             // Length limits to prevent abuse

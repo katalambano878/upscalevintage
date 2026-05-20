@@ -8,6 +8,7 @@ import { cachedQuery } from '@/lib/query-cache';
 import ProductCard from '@/components/ProductCard';
 import ProductReviews from '@/components/ProductReviews';
 import { StructuredData, generateProductSchema, generateBreadcrumbSchema } from '@/components/SEOHead';
+import { SITE_URL } from '@/lib/seo';
 import { notFound } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -264,10 +265,13 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
   });
 
   const breadcrumbSchema = generateBreadcrumbSchema([
-    { name: 'Home', url: 'https://tiwaperfumestyle.com' },
-    { name: 'Shop', url: 'https://tiwaperfumestyle.com/shop' },
-    { name: product.category, url: `https://tiwaperfumestyle.com/shop?category=${product.category.toLowerCase().replace(/\s+/g, '-')}` },
-    { name: product.name, url: `https://tiwaperfumestyle.com/product/${slug}` }
+    { name: 'Home', url: SITE_URL },
+    { name: 'Shop', url: `${SITE_URL}/shop` },
+    {
+      name: product.category,
+      url: `${SITE_URL}/shop?category=${product.category.toLowerCase().replace(/\s+/g, '-')}`,
+    },
+    { name: product.name, url: `${SITE_URL}/product/${slug}` },
   ]);
 
   return (

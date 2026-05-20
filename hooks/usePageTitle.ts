@@ -2,10 +2,10 @@
 
 import { useEffect } from 'react';
 
-const SITE_NAME = 'TIWAA PERFUME STYLE HOUSE';
+import { APP_TITLE } from '@/lib/brand';
 
 export function usePageTitle(title: string) {
   useEffect(() => {
-    document.title = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} | Perfumes Wholesale & Retail`;
+    document.title = title ? `${title} | ${APP_TITLE}` : `${APP_TITLE} | Curated Luxury & Lifestyle`;
   }, [title]);
 }

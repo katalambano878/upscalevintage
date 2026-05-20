@@ -99,11 +99,11 @@
 
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4);
+    box-shadow: 0 0 0 0 rgba(197, 138, 148, 0.35);
   }
 
   50% {
-    box-shadow: 0 0 20px 10px rgba(56, 189, 248, 0);
+    box-shadow: 0 0 20px 10px rgba(212, 176, 106, 0);
   }
 }
 
@@ -295,7 +295,7 @@
 }
 
 .hover-glow:hover {
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+  box-shadow: 0 0 20px rgba(197, 138, 148, 0.35);
 }
 
 /* ========================================
@@ -615,7 +615,7 @@ img {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 50%, #0c4a6e 100%);
+  background: #F8F4F1;
   animation: splashFadeOut 0.5s ease-out 1.5s forwards;
 }
 
@@ -665,6 +665,20 @@ img {
   animation: kenBurns 8s ease-out forwards;
 }
 
+/* Hero — crisp photography (no zoom blur) */
+.hero-slide-media {
+  object-fit: cover;
+  object-position: 72% center;
+  transform: none !important;
+  will-change: auto;
+}
+
+@media (min-width: 768px) {
+  .hero-slide-media {
+    object-position: right center;
+  }
+}
+
 @keyframes progress {
   from {
     transform: scaleX(0);
@@ -682,4 +696,135 @@ img {
 .vertical-text {
   writing-mode: vertical-rl;
   text-orientation: mixed;
+}
+
+/* ========================================
+   UPSCALE VINTAGE — LIFESTYLE / SOCIAL-COMMERCE THEME
+   ======================================== */
+
+body {
+  background-color: #FAF6F2;
+  color: #2E1F1B;
+}
+
+::selection {
+  background-color: #E8D7CC;
+  color: #6B3E2E;
+}
+
+.btn-luxury-primary,
+.btn-brand-primary {
+  @apply inline-flex items-center justify-center px-8 py-3.5 rounded-full font-medium tracking-wide transition-all duration-300;
+  background: linear-gradient(135deg, #6B3E2E 0%, #4A2A1F 100%);
+  color: #FAF6F2;
+  box-shadow: 0 4px 14px rgba(107, 62, 46, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.btn-luxury-primary:hover,
+.btn-brand-primary:hover {
+  background: linear-gradient(135deg, #4A2A1F 0%, #2E1F1B 100%);
+  box-shadow: 0 8px 24px -4px rgba(107, 62, 46, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.btn-luxury-outline {
+  @apply inline-flex items-center justify-center px-8 py-3.5 rounded-full font-medium tracking-wide border transition-all duration-300;
+  border-color: rgba(107, 62, 46, 0.2);
+  color: #6B3E2E;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 14px rgba(107, 62, 46, 0.05);
+}
+
+.btn-luxury-outline:hover {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(212, 176, 106, 0.6);
+  color: #2E1F1B;
+  box-shadow: 0 8px 24px -4px rgba(107, 62, 46, 0.12);
+  transform: translateY(-2px);
+}
+
+.btn-brand-soft {
+  @apply inline-flex items-center justify-center px-8 py-3.5 rounded-full font-medium tracking-wide border transition-all duration-300;
+  border-color: rgba(232, 215, 204, 0.6);
+  color: #6B3E2E;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.btn-brand-soft:hover {
+  background: rgba(232, 215, 204, 0.9);
+  border-color: rgba(197, 138, 148, 0.5);
+  transform: translateY(-1px);
+}
+
+/* Glassmorphism Utilities */
+.glass {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 32px 0 rgba(107, 62, 46, 0.05);
+}
+
+.glass-dark {
+  background: rgba(46, 31, 27, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+}
+
+.glass-panel {
+  background: rgba(250, 246, 242, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 32px 0 rgba(107, 62, 46, 0.08);
+}
+
+.text-luxury-accent {
+  color: #D4B06A;
+}
+
+.text-luxury-mauve {
+  color: #C58A94;
+}
+
+.bg-luxury-gradient-hero {
+  background: linear-gradient(145deg, #faf6f2 0%, #e8d7cc 35%, rgba(197, 138, 148, 0.28) 70%, rgba(212, 176, 106, 0.22) 100%);
+}
+
+.bg-hero-slide-1 {
+  background: linear-gradient(135deg, #faf6f2 0%, #e8d7cc 40%, rgba(197, 138, 148, 0.35) 100%);
+}
+
+.bg-hero-slide-2 {
+  background: linear-gradient(120deg, #e8d7cc 0%, #faf6f2 50%, rgba(212, 176, 106, 0.3) 100%);
+}
+
+.bg-hero-slide-3 {
+  background: linear-gradient(160deg, #faf6f2 0%, rgba(197, 138, 148, 0.25) 45%, rgba(107, 62, 46, 0.12) 100%);
+}
+
+.card-luxury,
+.card-brand {
+  @apply rounded-2xl overflow-hidden transition-all duration-500;
+  box-shadow: 0 4px 24px -4px rgba(107, 62, 46, 0.08);
+}
+
+.card-luxury:hover,
+.card-brand:hover {
+  box-shadow: 0 12px 40px -8px rgba(197, 138, 148, 0.2);
+  transform: translateY(-2px);
+}
+
+/* Decorative soft-glam orbs */
+.hero-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  pointer-events: none;
 }

@@ -2,6 +2,19 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import {
+    APP_TITLE,
+    TAGLINE,
+    LOGO_PATH,
+    SUPPORT_EMAIL,
+    CONTACT_PHONE,
+    CONTACT_WHATSAPP,
+    CONTACT_ADDRESS,
+    COLORS,
+    INSTAGRAM_URL,
+    CURRENCY,
+    CURRENCY_SYMBOL,
+} from '@/lib/brand';
 
 interface SiteSettings {
     site_name: string;
@@ -67,23 +80,23 @@ interface CMSContextType {
 }
 
 const defaultSettings: SiteSettings = {
-    site_name: 'TIWAA PERFUME STYLE HOUSE',
-    site_tagline: 'I sell perfumes — Wholesale and retail.',
-    site_logo: '/tiwa logo.png',
-    contact_email: 'tiwaperfumestyle@gmail.com',
-    contact_phone: '0545010949',
-    contact_whatsapp: '0554169992',
-    contact_address: 'Satellite, Accra',
+    site_name: APP_TITLE,
+    site_tagline: TAGLINE,
+    site_logo: LOGO_PATH,
+    contact_email: SUPPORT_EMAIL,
+    contact_phone: CONTACT_PHONE,
+    contact_whatsapp: CONTACT_WHATSAPP,
+    contact_address: CONTACT_ADDRESS,
     social_facebook: '',
-    social_instagram: '',
+    social_instagram: INSTAGRAM_URL,
     social_twitter: '',
     social_tiktok: '',
     social_snapchat: '',
     social_youtube: '',
-    primary_color: '#059669',
-    secondary_color: '#0D9488',
-    currency: 'GHS',
-    currency_symbol: 'GH₵',
+    primary_color: COLORS.primary,
+    secondary_color: COLORS.secondary,
+    currency: CURRENCY,
+    currency_symbol: CURRENCY_SYMBOL,
 };
 
 const CMSContext = createContext<CMSContextType>({
@@ -99,23 +112,23 @@ const CMSContext = createContext<CMSContextType>({
 
 export function CMSProvider({ children }: { children: ReactNode }) {
     const [settings, setSettings] = useState<SiteSettings>({
-        site_name: 'TIWAA PERFUME STYLE HOUSE',
-        site_tagline: 'I sell perfumes — Wholesale and retail.',
-        site_logo: '/tiwa logo.png',
-        contact_email: 'tiwaperfumestyle@gmail.com',
-        contact_phone: '0545010949',
-        contact_whatsapp: '0554169992',
-        contact_address: 'Satellite, Accra',
+        site_name: APP_TITLE,
+        site_tagline: TAGLINE,
+        site_logo: LOGO_PATH,
+        contact_email: SUPPORT_EMAIL,
+        contact_phone: CONTACT_PHONE,
+        contact_whatsapp: CONTACT_WHATSAPP,
+        contact_address: CONTACT_ADDRESS,
         social_facebook: '',
-        social_instagram: '',
+        social_instagram: INSTAGRAM_URL,
         social_twitter: '',
         social_tiktok: '',
         social_snapchat: '',
         social_youtube: '',
-        primary_color: '#2563eb',
-        secondary_color: '#FBF6F2',
-        currency: 'GHS',
-        currency_symbol: 'GH₵',
+        primary_color: COLORS.primary,
+        secondary_color: COLORS.secondary,
+        currency: CURRENCY,
+        currency_symbol: CURRENCY_SYMBOL,
     });
     const [content, setContent] = useState<CMSContent[]>([]);
     const [banners, setBanners] = useState<Banner[]>([]);

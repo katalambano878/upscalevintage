@@ -5,87 +5,87 @@ import { useState } from 'react';
 import { useCMS } from '@/context/CMSContext';
 import PageHero from '@/components/PageHero';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import {
+  APP_TITLE,
+  CONTACT_ADDRESS,
+  CONTACT_PHONE_DISPLAY,
+  WHATSAPP_LINK,
+  LOGO_PATH,
+} from '@/lib/brand';
 
 export default function AboutPage() {
   usePageTitle('Our Story');
   const { getSetting } = useCMS();
   const [activeTab, setActiveTab] = useState('story');
 
-  const siteName = getSetting('site_name') || 'TIWAA PERFUME STYLE HOUSE';
+  const siteName = getSetting('site_name') || APP_TITLE;
 
   const values = [
     {
-      icon: 'ri-verified-badge-line',
-      title: 'Verified Quality',
-      description: 'Every perfume is personally inspected before it reaches you. We focus on authentic fragrances and quality you can trust.'
+      title: 'Curated Finds',
+      description:
+        'Every piece is handpicked for modern style: fashion, bags, accessories, and lifestyle favorites chosen with a trendy eye.',
     },
     {
-      icon: 'ri-money-dollar-circle-line',
-      title: 'Unbeatable Prices',
-      description: 'Competitive wholesale and retail prices. We pass the savings to resellers and individual customers.'
+      title: 'Imported Picks',
+      description:
+        'Access stylish imports and trending arrivals you will not see everywhere. Fresh drops for everyday glam.',
     },
     {
-      icon: 'ri-global-line',
-      title: 'Curated Fragrances',
-      description: 'A handpicked range of perfumes for every taste. Genuine products at great prices.'
+      title: 'Modern Femininity',
+      description:
+        'A brand built for women who love soft glam, confidence, and aspirational lifestyle culture.',
     },
     {
-      icon: 'ri-truck-line',
-      title: 'Nationwide Delivery',
-      description: 'Fast and reliable delivery across Ghana. Based in Satellite, Accra, we ship with care and speed.'
-    }
+      title: 'Delivered With Care',
+      description: `Based in ${CONTACT_ADDRESS}, we serve fashion and lifestyle lovers across Ghana with friendly, reliable service.`,
+    },
   ];
 
+  const tabActive = 'text-brand-espresso border-b-4 border-brand-mauve font-bold';
+  const tabIdle = 'text-brand-cocoa/60 hover:text-brand-espresso';
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-brand-cream">
       <PageHero
-        title="More Than Just A Brand"
-        subtitle="From Satellite, Accra — perfumes wholesale and retail."
-        backgroundImage="/Whisk_743db4f33bd7ec08b0f46aec28e929cfdr.jpeg"
+        title="More Than A Brand"
+        subtitle="A trendy lifestyle import destination. Feminine, modern, and curated for stylish everyday living."
       />
 
-      {/* Who We Are - Hero section */}
-      <section className="py-20 bg-white overflow-hidden">
+      <section className="py-20 bg-brand-cream overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
-              <h2 className="text-3xl md:text-4xl font-serif text-gray-900 mb-6">Who We Are</h2>
-              <div className="space-y-4 text-lg text-gray-600 leading-relaxed">
+              <h2 className="text-3xl md:text-4xl font-display text-brand-espresso mb-6">Who We Are</h2>
+              <div className="space-y-4 text-lg text-brand-cocoa/80 leading-relaxed font-light">
                 <p>
-                  <strong>TIWAA PERFUME STYLE HOUSE</strong> is your premier destination for perfumes, both wholesale and retail. Based in Satellite, Accra, we offer a curated range of fragrances at competitive prices for resellers and individual customers.
+                  <strong className="text-brand-espresso">{siteName}</strong> is your fashion and lifestyle import
+                  plug. A modern social commerce brand for trendy women who want stylish finds, accessories, and
+                  aspirational everyday glam.
                 </p>
                 <p>
-                  We focus on quality and value. Whether you're stocking up for your business or shopping for yourself, we handpick our perfumes to deliver genuine products and great prices.
+                  We are not a generic marketplace or thrift vibe. Every collection feels curated, fresh, and
+                  designed to make you feel like you always have access to the best imported lifestyle products.
                 </p>
                 <div className="pt-4">
                   <Link
                     href="#our-story"
-                    className="inline-flex items-center text-blue-800 font-medium hover:text-blue-900 transition-colors group"
+                    className="inline-flex items-center text-brand-espresso font-medium hover:text-brand-mauve transition-colors group"
                   >
-                    <span className="border-b border-transparent group-hover:border-blue-900 transition-colors">Read Our Full Story</span>
-                    <i className="ri-arrow-right-line ml-2 transition-transform group-hover:translate-x-1"></i>
+                    <span className="border-b border-transparent group-hover:border-brand-mauve transition-colors">
+                      Read our full story
+                    </span>
                   </Link>
                 </div>
               </div>
             </div>
             <div className="relative">
-              <div className="aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl relative">
-                <img
-                  src="/Whisk_743db4f33bd7ec08b0f46aec28e929cfdr.jpeg"
-                  alt="TIWAA PERFUME STYLE HOUSE — Premium perfumes"
-                  className="w-full h-full object-cover"
-                />
+              <div className="aspect-[4/3] rounded-3xl overflow-hidden shadow-soft relative bg-brand-nude/40 border border-brand-nude">
+                <img src={LOGO_PATH} alt={siteName} className="w-full h-full object-contain p-8" />
               </div>
-              <div className="absolute -bottom-6 -left-6 bg-white p-6 rounded-xl shadow-xl max-w-xs border border-gray-100">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-700">
-                    <i className="ri-medal-line text-xl"></i>
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-900">Premium Quality</p>
-                    <p className="text-sm text-gray-500">Authentic Fragrances</p>
-                  </div>
-                </div>
+              <div className="absolute -bottom-6 -left-6 bg-white p-6 rounded-2xl shadow-luxury max-w-xs border border-brand-nude">
+                <p className="font-display text-brand-espresso">Trending style</p>
+                <p className="text-sm text-brand-cocoa/60 font-light mt-1">Fashion &amp; lifestyle finds</p>
               </div>
             </div>
           </div>
@@ -93,119 +93,115 @@ export default function AboutPage() {
       </section>
 
       <div id="our-story" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <div className="flex border-b border-gray-200 mb-12 justify-center">
+        <div className="flex border-b border-brand-nude mb-12 justify-center">
           <button
             onClick={() => setActiveTab('story')}
-            className={`px-4 py-2 sm:px-8 sm:py-4 font-medium transition-colors text-lg cursor-pointer ${activeTab === 'story'
-              ? 'text-blue-700 border-b-4 border-blue-700 font-bold'
-              : 'text-gray-500 hover:text-gray-700'
-              }`}
+            className={`px-4 py-2 sm:px-8 sm:py-4 font-medium transition-colors text-lg cursor-pointer ${
+              activeTab === 'story' ? tabActive : tabIdle
+            }`}
           >
             Our Story
           </button>
           <button
             onClick={() => setActiveTab('mission')}
-            className={`px-4 py-2 sm:px-8 sm:py-4 font-medium transition-colors text-lg cursor-pointer ${activeTab === 'mission'
-              ? 'text-blue-700 border-b-4 border-blue-700 font-bold'
-              : 'text-gray-500 hover:text-gray-700'
-              }`}
+            className={`px-4 py-2 sm:px-8 sm:py-4 font-medium transition-colors text-lg cursor-pointer ${
+              activeTab === 'mission' ? tabActive : tabIdle
+            }`}
           >
             Our Mission
           </button>
         </div>
 
         {activeTab === 'story' && (
-          <div className="grid md:grid-cols-2 gap-16 items-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="grid md:grid-cols-2 gap-16 items-center animate-fade-in-up">
             <div>
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-6">How It All Started</h2>
-              <div className="space-y-6 text-lg text-gray-600 leading-relaxed">
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-display text-brand-espresso mb-6">
+                How It All Started
+              </h2>
+              <div className="space-y-6 text-lg text-brand-cocoa/80 leading-relaxed font-light">
                 <p>
-                  <strong>TIWAA PERFUME STYLE HOUSE</strong> sells perfumes — wholesale and retail. Based in Satellite, Accra, we offer a curated range of fragrances at competitive prices for both resellers and individual customers.
+                  <strong className="text-brand-espresso">{siteName}</strong> began with a simple idea: make stylish
+                  imported fashion and lifestyle products feel accessible, exciting, and personal, like shopping your
+                  favorite creator&apos;s picks.
                 </p>
                 <p>
-                  We focus on quality and value. Whether you're stocking up for your business or shopping for yourself, we handpick our perfumes to deliver genuine products and great prices.
+                  From statement accessories and bags to lifestyle favorites and special imported arrivals, we build
+                  collections around what&apos;s trending and what our community loves.
                 </p>
                 <p>
-                  Call us on <strong>054 501 0949</strong> or WhatsApp <strong>055 416 9992</strong>. We're here to help with orders and enquiries.
+                  Reach us on <strong>{CONTACT_PHONE_DISPLAY}</strong> or{' '}
+                  <a href={WHATSAPP_LINK} className="text-brand-mauve hover:underline font-medium">
+                    WhatsApp
+                  </a>
+                  . We&apos;re here for orders, styling questions, and updates on new drops.
                 </p>
               </div>
             </div>
             <div className="relative">
-              <div className="aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl bg-gray-100 relative flex items-center justify-center">
-                <img
-                  src="/tiwa logo.png"
-                  alt="TIWAA PERFUME STYLE HOUSE"
-                  className="w-2/3 h-auto object-contain opacity-80"
-                />
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-8">
-                  <p className="text-white font-bold text-xl">TIWAA PERFUME STYLE HOUSE</p>
-                  <p className="text-blue-200">Perfumes · Wholesale & Retail · Satellite, Accra</p>
+              <div className="aspect-[3/4] rounded-3xl overflow-hidden shadow-luxury-lg bg-brand-nude/30 relative flex items-center justify-center border border-brand-nude">
+                <img src={LOGO_PATH} alt={siteName} className="w-2/3 h-auto object-contain" />
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-brand-espresso/85 to-transparent p-8">
+                  <p className="text-brand-cream font-display text-xl">{siteName}</p>
+                  <p className="text-brand-nude/90 text-sm tracking-wide">
+                    Fashion · Lifestyle · Imported finds
+                  </p>
                 </div>
               </div>
-              {/* Decorative Element */}
-              <div className="absolute -z-10 top-10 -right-10 w-full h-full border-4 border-blue-100 rounded-2xl hidden md:block"></div>
+              <div className="absolute -z-10 top-10 -right-10 w-full h-full border-2 border-brand-mauve/20 rounded-3xl hidden md:block" />
             </div>
           </div>
         )}
 
         {activeTab === 'mission' && (
-          <div className="grid md:grid-cols-2 gap-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-blue-50 p-10 rounded-3xl border border-blue-100">
-              <div className="w-16 h-16 bg-blue-700 rounded-2xl flex items-center justify-center mb-8 shadow-lg">
-                <i className="ri-store-2-line text-3xl text-white"></i>
-              </div>
-              <h3 className="text-3xl font-bold text-gray-900 mb-4">Everything in One Place</h3>
-              <p className="text-gray-600 text-lg leading-relaxed">
-                We stock a wide range of perfumes and fragrances. Our catalogue is constantly updated with new arrivals for both wholesale and retail customers.
+          <div className="grid md:grid-cols-2 gap-12 animate-fade-in-up">
+            <div className="bg-white p-10 rounded-3xl border border-brand-nude shadow-sm">
+              <h3 className="text-3xl font-display text-brand-espresso mb-4">Curated For You</h3>
+              <p className="text-brand-cocoa/80 text-lg leading-relaxed font-light">
+                We bring together fashion picks, accessories, lifestyle products, and imported finds in one stylish
+                shopping experience. Always fresh, always curated.
               </p>
             </div>
-            <div className="bg-amber-50 p-10 rounded-3xl border border-amber-100">
-              <div className="w-16 h-16 bg-amber-600 rounded-2xl flex items-center justify-center mb-8 shadow-lg">
-                <i className="ri-hand-heart-line text-3xl text-white"></i>
-              </div>
-              <h3 className="text-3xl font-bold text-gray-900 mb-4">Empowering Resellers</h3>
-              <p className="text-gray-600 text-lg leading-relaxed">
-                We support small businesses and resellers with competitive bulk pricing. Many of our products are available at wholesale rates, helping entrepreneurs across Ghana grow their own ventures.
+            <div className="bg-brand-nude/30 p-10 rounded-3xl border border-brand-nude">
+              <h3 className="text-3xl font-display text-brand-espresso mb-4">Community First</h3>
+              <p className="text-brand-cocoa/80 text-lg leading-relaxed font-light">
+                We grow with our customers, sharing trending arrivals, exclusive updates, and lifestyle favorites
+                that feel social, modern, and genuinely exciting.
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Values Section */}
-      <div className="bg-gray-50 py-24">
+      <div className="bg-white py-24 border-y border-brand-nude">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Why Shop With Us?</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">Trusted by hundreds of customers and resellers across Ghana.</p>
+            <h2 className="text-4xl font-display text-brand-espresso mb-4">Why Shop With Us?</h2>
+            <p className="text-xl text-brand-cocoa/70 max-w-2xl mx-auto font-light">
+              Stylish finds, imported energy, and a shopping experience built for modern everyday glam.
+            </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {values.map((value, index) => (
-              <div key={index} className="bg-white p-8 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mb-6">
-                  <i className={`${value.icon} text-2xl text-blue-700`}></i>
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">{value.title}</h3>
-                <p className="text-gray-600 leading-relaxed">{value.description}</p>
+              <div
+                key={index}
+                className="bg-brand-cream p-8 rounded-2xl border border-brand-nude hover:shadow-soft transition-all duration-300 hover:-translate-y-1"
+              >
+                <h3 className="text-xl font-display text-brand-espresso mb-3">{value.title}</h3>
+                <p className="text-brand-cocoa/75 leading-relaxed font-light">{value.description}</p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* CTA */}
-      <div className="bg-blue-900 py-24">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
-          <h2 className="text-4xl md:text-5xl font-bold mb-8">Ready to shop smarter?</h2>
-          <p className="text-xl text-blue-100 mb-10 leading-relaxed max-w-2xl mx-auto">
-            Browse our perfumes — wholesale and retail. Call 054 501 0949 or WhatsApp 055 416 9992.
+      <div className="bg-brand-espresso py-24">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-brand-cream">
+          <h2 className="text-4xl md:text-5xl font-display mb-8">Ready to explore?</h2>
+          <p className="text-xl text-brand-nude/90 mb-10 leading-relaxed max-w-2xl mx-auto font-light">
+            Discover trending fashion, accessories, and imported lifestyle picks curated for you.
           </p>
-          <Link
-            href="/shop"
-            className="inline-flex items-center gap-3 bg-white text-blue-900 px-10 py-5 rounded-full font-bold text-lg hover:bg-blue-50 transition-colors shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all"
-          >
-            Start Shopping
-            <i className="ri-arrow-right-line"></i>
+          <Link href="/shop" className="btn-luxury-primary text-base px-10 py-4 inline-flex items-center">
+            Shop Collection
           </Link>
         </div>
       </div>

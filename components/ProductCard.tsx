@@ -83,36 +83,38 @@ export default function ProductCard({
 
   return (
     <div className="group bg-transparent rounded-lg h-full flex flex-col hover-lift">
-      <Link href={`/product/${slug}`} className="relative block aspect-[3/4] overflow-hidden rounded-xl bg-gray-100 mb-4 shadow-sm group-hover:shadow-xl transition-all duration-300">
+      <Link href={`/product/${slug}`} className="relative block aspect-[3/4] overflow-hidden rounded-2xl bg-brand-nude/30 mb-4 shadow-sm group-hover:shadow-luxury transition-all duration-500">
         <LazyImage
           src={image}
           alt={name}
-          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
+          className="w-full h-full object-cover object-top group-hover:scale-110 transition-transform duration-[1200ms] ease-out"
         />
 
-        <div className="absolute top-3 left-3 flex flex-col gap-2">
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-espresso/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 hidden lg:block" />
+
+        <div className="absolute top-3 left-3 flex flex-col gap-2 z-10">
           {badge && (
-            <span className="bg-white/90 backdrop-blur text-gray-900 border border-gray-100 text-[10px] uppercase tracking-wider font-bold px-3 py-1.5 rounded-md shadow-sm">
+            <span className="glass text-brand-espresso border border-white/50 text-[10px] uppercase tracking-widest font-bold px-3.5 py-1.5 rounded-full shadow-sm">
               {badge}
             </span>
           )}
           {discount > 0 && (
-            <span className="bg-red-50 text-red-700 border border-red-100 text-[10px] uppercase tracking-wider font-bold px-3 py-1.5 rounded-md shadow-sm">
+            <span className="bg-red-50/90 backdrop-blur-md text-red-700 border border-red-200/50 text-[10px] uppercase tracking-widest font-bold px-3.5 py-1.5 rounded-full shadow-sm">
               -{discount}%
             </span>
           )}
         </div>
 
         {!inStock && (
-          <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
-            <span className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium">Out of Stock</span>
+          <div className="absolute inset-0 glass flex items-center justify-center z-20">
+            <span className="glass-dark text-white px-5 py-2.5 rounded-full text-xs tracking-widest uppercase font-medium">Out of Stock</span>
           </div>
         )}
 
         {inStock && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 translate-y-full group-hover:translate-y-0 transition-transform duration-300 hidden lg:block">
+          <div className="absolute bottom-0 left-0 right-0 p-4 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out hidden lg:block z-20">
             {hasVariants ? (
-              <span className="w-full bg-white text-gray-900 hover:bg-gray-900 hover:text-white py-3 rounded-lg font-medium shadow-lg transition-colors flex items-center justify-center space-x-2 text-sm">
+              <span className="w-full glass text-brand-espresso hover:bg-white/90 py-3.5 rounded-xl font-medium shadow-lg transition-all flex items-center justify-center space-x-2 text-sm border border-white/60">
                 <i className="ri-list-check"></i>
                 <span>Select Options</span>
               </span>
@@ -122,7 +124,7 @@ export default function ProductCard({
                   e.preventDefault();
                   addToCart({ id, name, price, image, quantity: moq, slug, maxStock, moq });
                 }}
-                className="w-full bg-white text-gray-900 hover:bg-gray-900 hover:text-white py-3 rounded-lg font-medium shadow-lg transition-colors flex items-center justify-center space-x-2 text-sm"
+                className="w-full glass text-brand-espresso hover:bg-white/90 py-3.5 rounded-xl font-medium shadow-lg transition-all flex items-center justify-center space-x-2 text-sm border border-white/60"
               >
                 <i className="ri-shopping-cart-2-line"></i>
                 <span>{moq > 1 ? `Add ${moq} to Cart` : 'Quick Add'}</span>
@@ -134,7 +136,7 @@ export default function ProductCard({
 
       <div className="flex flex-col flex-grow">
         <Link href={`/product/${slug}`}>
-          <h3 className="font-serif text-lg leading-tight text-gray-900 mb-1 group-hover:text-blue-800 transition-colors line-clamp-2">
+          <h3 className="font-display text-lg leading-tight text-brand-espresso mb-1 group-hover:text-brand-mauve transition-colors duration-300 line-clamp-2">
             {name}
           </h3>
         </Link>
@@ -151,7 +153,7 @@ export default function ProductCard({
                 }}
                 className={`w-4 h-4 rounded-full border transition-all duration-200 flex-shrink-0 ${
                   activeColor === color.name
-                    ? 'ring-2 ring-offset-1 ring-blue-600 scale-110'
+                    ? 'ring-2 ring-offset-1 ring-brand-champagne scale-110'
                     : 'hover:scale-110'
                 } ${color.hex === '#FFFFFF' ? 'border-gray-300' : 'border-transparent'}`}
                 style={{ backgroundColor: color.hex }}
@@ -165,12 +167,12 @@ export default function ProductCard({
 
         <div className="flex items-baseline space-x-2 mb-2">
           {hasVariants && minVariantPrice ? (
-            <span className="text-gray-900 font-semibold">From {formatPrice(minVariantPrice)}</span>
+            <span className="text-brand-espresso font-semibold">From {formatPrice(minVariantPrice)}</span>
           ) : (
-            <span className="text-gray-900 font-semibold">{formatPrice(price)}</span>
+            <span className="text-brand-espresso font-semibold">{formatPrice(price)}</span>
           )}
           {originalPrice && (
-            <span className="text-sm text-gray-400 line-through">{formatPrice(originalPrice)}</span>
+            <span className="text-sm text-brand-cocoa/40 line-through">{formatPrice(originalPrice)}</span>
           )}
         </div>
 
@@ -178,7 +180,7 @@ export default function ProductCard({
           {hasVariants ? (
             <Link
               href={`/product/${slug}`}
-              className="w-full border border-gray-200 text-gray-900 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center space-x-1"
+              className="w-full border border-brand-nude/80 text-brand-espresso py-2.5 rounded-xl text-sm font-medium hover:bg-brand-nude/30 active:bg-brand-nude/50 transition-colors flex items-center justify-center space-x-1"
             >
               <i className="ri-list-check text-sm"></i>
               <span>Select Options</span>
@@ -190,7 +192,7 @@ export default function ProductCard({
                 addToCart({ id, name, price, image, quantity: moq, slug, maxStock, moq });
               }}
               disabled={!inStock}
-              className="w-full border border-gray-200 text-gray-900 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full border border-brand-nude/80 text-brand-espresso py-2.5 rounded-xl text-sm font-medium hover:bg-brand-nude/30 active:bg-brand-nude/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {moq > 1 ? `Add ${moq} to Cart` : 'Add to Cart'}
             </button>

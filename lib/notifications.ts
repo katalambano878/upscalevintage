@@ -1,17 +1,18 @@
 import { Resend } from 'resend';
 import { supabase } from '@/lib/supabase';
 import { escapeHtml } from '@/lib/sanitize';
+import { APP_TITLE, EMAIL_FROM_DEFAULT, ADMIN_EMAIL_DEFAULT } from '@/lib/brand';
 
 const resend = new Resend(process.env.RESEND_API_KEY || 'missing_api_key');
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'tiwaperfumestyle@gmail.com';
-const EMAIL_FROM = process.env.EMAIL_FROM || 'TIWAA PERFUME STYLE HOUSE <tiwaperfumestyle@gmail.com>';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || ADMIN_EMAIL_DEFAULT;
+const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_FROM_DEFAULT;
 const BRAND = {
-    name: 'TIWAA PERFUME STYLE HOUSE',
+    name: APP_TITLE,
     color: '#2563eb',
     colorLight: '#eff6ff',
     colorDark: '#064e3b',
     url: (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, ''),
-    phone: '+233545010949',
+    phone: 'YOUR_PHONE',
 };
 
 // Reusable branded email layout
@@ -154,7 +155,7 @@ export async function sendSMS({ to, message }: { to: string; message: string }) 
             },
             body: JSON.stringify({
                 type: 1,
-                senderid: 'TIWAA',
+                senderid: 'YOUR_BRAND_NAME',
                 messages: [
                     {
                         recipient: recipient,
@@ -296,7 +297,7 @@ ${emailButton('View Order in Admin', `${baseUrl}/admin/orders/${id}`)}
     if (phone) {
         const smsMessage = trackingNumber
             ? `Hi ${name}, your order #${order_number || id} is confirmed! Tracking: ${trackingNumber}. Track here: ${trackingUrl}${shippingNotesSms}`
-            : `Hi ${name}, your order #${order_number || id} at TIWAA PERFUME STYLE HOUSE is confirmed! Track here: ${trackingUrl}${shippingNotesSms}`;
+            : `Hi ${name}, your order #${order_number || id} at ${APP_TITLE} is confirmed! Track here: ${trackingUrl}${shippingNotesSms}`;
 
         await sendSMS({
             to: phone,
@@ -438,7 +439,7 @@ ${emailButton('Start Shopping', `${BRAND.url}/shop`)}
     if (phone) {
         await sendSMS({
             to: phone,
-            message: `Welcome ${firstName}! Thanks for joining TIWAA PERFUME STYLE HOUSE.`
+            message: `Welcome ${firstName}! Thanks for joining ${APP_TITLE}.`
         });
     }
 }
@@ -504,20 +505,26 @@ ${emailButton('Pay Now — GH₵' + Number(total).toFixed(2), paymentUrl, '#d977
     }
 }
 
-export async function sendContactMessage(data: { name: string, email: string, subject: string, message: string }) {
-    const { name, email, subject, message } = data;
+export async function sendContactMessage(data: {
+    name: string;
+    email?: string;
+    phone?: string;
+    subject: string;
+    message: string;
+}) {
+    const { name, email, phone, subject, message } = data;
 
-    // SECURITY: Sanitize all user input before injecting into HTML
     const safeName = escapeHtml(name);
     const safeSubject = escapeHtml(subject);
     const safeMessage = escapeHtml(message);
-    const safeEmail = escapeHtml(email);
+    const safeEmail = email ? escapeHtml(email) : '';
+    const safePhone = phone ? escapeHtml(phone) : '';
 
-    // 1. Acknowledge to User
-    await sendEmail({
-        to: email,
-        subject: `We received your message: ${subject}`,
-        html: emailLayout(`
+    if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        await sendEmail({
+            to: email,
+            subject: `We received your message: ${subject}`,
+            html: emailLayout(`
 <div style="text-align:center;margin-bottom:24px;">
   <div style="width:64px;height:64px;background-color:${BRAND.colorLight};border-radius:50%;margin:0 auto 16px;line-height:64px;font-size:28px;">&#128172;</div>
   <h2 style="margin:0 0 4px;color:#111827;font-size:22px;">Message Received</h2>
@@ -534,9 +541,22 @@ export async function sendContactMessage(data: { name: string, email: string, su
 
 <p style="color:#6b7280;font-size:13px;margin:16px 0 0;">We typically respond within 24 hours.</p>
 `, `Thanks for contacting us, ${safeName}`)
-    });
+        });
+    }
 
-    // 2. Alert Admin
+    const contactRows = [
+        emailInfoRow('From', safeName),
+        ...(safePhone ? [emailInfoRow('Phone', safePhone)] : []),
+        ...(safeEmail ? [emailInfoRow('Email', `<a href="mailto:${safeEmail}" style="color:${BRAND.color};">${safeEmail}</a>`)] : []),
+        emailInfoRow('Subject', safeSubject),
+    ].join('');
+
+    const replyHref = safeEmail
+        ? `mailto:${safeEmail}?subject=Re: ${encodeURIComponent(subject)}`
+        : phone
+          ? `https://wa.me/233${phone.replace(/\D/g, '').replace(/^0/, '')}`
+          : `mailto:${ADMIN_EMAIL}`;
+
     await sendEmail({
         to: ADMIN_EMAIL,
         subject: `Contact: ${subject}`,
@@ -544,9 +564,7 @@ export async function sendContactMessage(data: { name: string, email: string, su
 <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">&#128233; New Contact Message</h2>
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:12px;overflow:hidden;margin:16px 0;">
-  ${emailInfoRow('From', safeName)}
-  ${emailInfoRow('Email', `<a href="mailto:${safeEmail}" style="color:${BRAND.color};">${safeEmail}</a>`)}
-  ${emailInfoRow('Subject', safeSubject)}
+  ${contactRows}
 </table>
 
 <div style="background-color:#f9fafb;border-left:4px solid ${BRAND.color};border-radius:0 8px 8px 0;padding:16px 20px;margin:20px 0;">
@@ -554,7 +572,7 @@ export async function sendContactMessage(data: { name: string, email: string, su
   <p style="color:#374151;font-size:14px;margin:0;line-height:1.6;">${safeMessage}</p>
 </div>
 
-${emailButton('Reply to ' + safeName, `mailto:${safeEmail}?subject=Re: ${encodeURIComponent(subject)}`)}
+${emailButton('Reply to ' + safeName, replyHref)}
 `, `New contact from ${safeName}: ${safeSubject}`)
     });
 }

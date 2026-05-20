@@ -1,10 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
+import { isSupabaseConfigured, resolvePublicSupabaseCredentials } from './supabase-config';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+export { isSupabaseConfigured };
 
-if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables');
+const { url, anonKey, configured } = resolvePublicSupabaseCredentials();
+
+if (!configured && typeof window !== 'undefined') {
+    console.warn(
+        '[Supabase] No credentials in .env.local — UI only. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY for live data.'
+    );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(url, anonKey);

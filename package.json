@@ -1,4 +1,19 @@
 {
+  "name": "upscale-vintage",
+  "version": "1.0.0",
+  "description": "YOUR_PROJECT_DESCRIPTION",
+  "author": "YOUR_NAME <your@email.com>",
+  "license": "YOUR_LICENSE",
+  "homepage": "https://yourdomain.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YOUR_USERNAME/YOUR_REPO_NAME/issues"
+  },
+  "keywords": ["YOUR", "KEYWORDS", "HERE"],
+  "private": true,
   "dependencies": {
     "@react-google-maps/api": "^2.19.3",
     "@supabase/supabase-js": "^2.91.1",
@@ -27,19 +42,17 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5"
   },
-  "name": "tiwaa-perfume-style-house",
-  "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "cross-env NODE_ENV=development next dev -H 0.0.0.0 -p 3000",
+    "dev": "next dev -H 0.0.0.0 -p 3000",
     "lint": "next lint",
-    "supabase:link": "supabase link --project-ref bskojprmfxugvkycvetc",
+    "supabase:link": "supabase link --project-ref YOUR_PROJECT_ID",
     "supabase:push": "supabase db push",
-    "supabase:migrate": "supabase link --project-ref bskojprmfxugvkycvetc && supabase db push",
+    "supabase:migrate": "supabase link --project-ref YOUR_PROJECT_ID && supabase db push",
     "db:migrate": "node scripts/run-migration.mjs",
     "create-admin": "node scripts/create-admin-user.mjs",
-    "vercel": "vercel -Q ./.vercel-cli-config",
+    "generate:seo": "node scripts/generate-seo-assets.mjs",
+    "vercel": "vercel",
     "images:compress": "node scripts/compress-images.mjs"
-  },
-  "version": "0.1.0"
+  }
 }

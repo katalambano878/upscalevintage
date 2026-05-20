@@ -1,1 +1,35 @@
-{"name":"TIWAA PERFUME STYLE HOUSE","short_name":"TIWAA Perfume","description":"I sell perfumes — wholesale and retail. Satellite, Accra. Call 054 501 0949 · WhatsApp 055 416 9992.","start_url":"/?source=pwa","scope":"/","display":"standalone","orientation":"portrait","background_color":"#ffffff","theme_color":"#2563eb","dir":"ltr","lang":"en","categories":["shopping","lifestyle"],"icons":[{"src":"/tiwa logo.png","sizes":"any","type":"image/png","purpose":"any"},{"src":"/tiwa logo.png","sizes":"any","type":"image/png","purpose":"maskable"}],"shortcuts":[{"name":"Shop Products","short_name":"Shop","description":"Browse perfumes","url":"/shop?source=pwa-shortcut","icons":[{"src":"/tiwa logo.png","sizes":"any"}]},{"name":"My Cart","short_name":"Cart","description":"View your shopping cart","url":"/cart?source=pwa-shortcut","icons":[{"src":"/tiwa logo.png","sizes":"any"}]},{"name":"Track Order","short_name":"Track","description":"Track your order status","url":"/order-tracking?source=pwa-shortcut","icons":[{"src":"/tiwa logo.png","sizes":"any"}]},{"name":"My Account","short_name":"Account","description":"View your account","url":"/account?source=pwa-shortcut","icons":[{"src":"/tiwa logo.png","sizes":"any"}]}],"screenshots":[],"prefer_related_applications":false,"related_applications":[]}
+{
+  "name": "Upscale Vintage",
+  "short_name": "Upscale",
+  "description": "Shop curated fashion, bags, accessories, and imported lifestyle finds in Ghana.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAF6F2",
+  "theme_color": "#6B3E2E",
+  "dir": "ltr",
+  "lang": "en",
+  "categories": ["shopping", "lifestyle", "fashion"],
+  "icons": [
+    {
+      "src": "/favicon/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "prefer_related_applications": false
+}

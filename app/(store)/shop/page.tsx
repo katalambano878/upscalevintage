@@ -202,7 +202,7 @@ function ShopContent() {
       <PageHero
         title="Shop All Products"
         subtitle="Browse our range of perfumes and fragrances"
-        backgroundImage="/Whisk_6ec7df94ec3ca85b49644810b7fab2ecdr.jpeg"
+        
       />
 
       {/* Mobile Filter Toggle */}
