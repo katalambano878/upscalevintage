@@ -17,7 +17,7 @@ export default function AdminDashboard() {
       change: '0%', // Placeholder trend
       trend: 'up',
       icon: 'ri-money-dollar-circle-line',
-      color: 'blue'
+      color: 'espresso'
     },
     {
       title: 'Orders',
@@ -25,15 +25,15 @@ export default function AdminDashboard() {
       change: '0%',
       trend: 'up',
       icon: 'ri-shopping-bag-line',
-      color: 'blue'
+      color: 'champagne'
     },
     {
-      title: 'Customers', // This is total active users for us currently
+      title: 'Customers',
       value: '0',
       change: '0%',
       trend: 'up',
       icon: 'ri-group-line',
-      color: 'purple'
+      color: 'mauve'
     },
     {
       title: 'Avg Order Value',
@@ -41,7 +41,7 @@ export default function AdminDashboard() {
       change: '0%',
       trend: 'up',
       icon: 'ri-line-chart-line',
-      color: 'amber'
+      color: 'nude'
     }
   ]);
 
@@ -204,9 +204,9 @@ export default function AdminDashboard() {
 
   const statusColors: any = {
     'pending': 'bg-amber-100 text-amber-700',
-    'processing': 'bg-blue-100 text-blue-700',
-    'shipped': 'bg-purple-100 text-purple-700',
-    'delivered': 'bg-blue-100 text-blue-700',
+    'processing': 'bg-brand-nude text-brand-espresso',
+    'shipped': 'bg-brand-mauve/20 text-brand-mauve',
+    'delivered': 'bg-brand-champagne/30 text-brand-espresso',
     'cancelled': 'bg-red-100 text-red-700'
   };
 
@@ -229,44 +229,51 @@ export default function AdminDashboard() {
     // ... reduced list for brevity or keep all if desired
   ];
 
+  const statIconStyles: Record<string, string> = {
+    espresso: 'bg-brand-espresso/10 text-brand-espresso',
+    champagne: 'bg-brand-champagne/25 text-brand-espresso',
+    mauve: 'bg-brand-mauve/20 text-brand-mauve',
+    nude: 'bg-brand-nude text-brand-cocoa',
+  };
+
   if (loading) {
-    return <div className="p-8 text-center text-gray-500">Loading Dashboard...</div>;
+    return <div className="p-8 text-center text-brand-cocoa/70">Loading dashboard…</div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-1">Welcome back! Here's what's happening with your store.</p>
+            <h1 className="font-display text-3xl font-semibold text-brand-espresso">Dashboard</h1>
+            <p className="text-brand-cocoa/80 mt-1">Welcome back! Here&apos;s what&apos;s happening with your store.</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {stats.map((stat) => (
-            <div key={stat.title} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div key={stat.title} className="bg-white rounded-xl shadow-sm border border-brand-nude p-6 hover:shadow-luxury transition-shadow">
               <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 flex items-center justify-center bg-${stat.color}-100 text-${stat.color}-700 rounded-lg`}>
+                <div className={`w-12 h-12 flex items-center justify-center rounded-lg ${statIconStyles[stat.color] || statIconStyles.espresso}`}>
                   <i className={`${stat.icon} text-2xl`}></i>
                 </div>
-                <span className={`text-sm font-semibold text-blue-700`}>
+                <span className="text-sm font-semibold text-brand-champagne">
                   {stat.change}
                 </span>
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</h3>
-              <p className="text-gray-600 text-sm">{stat.title}</p>
+              <h3 className="text-2xl font-bold text-brand-espresso mb-1">{stat.value}</h3>
+              <p className="text-brand-cocoa/70 text-sm">{stat.title}</p>
             </div>
           ))}
         </div>
 
         {/* Revenue Chart & Quick Actions */}
         <div className="grid lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-brand-nude">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Revenue Trend</h2>
+              <h2 className="text-xl font-bold text-brand-espresso">Revenue Trend</h2>
               <select
-                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2"
+                className="bg-brand-cream border border-brand-nude text-brand-cocoa text-sm rounded-lg focus:ring-brand-champagne/50 focus:border-brand-espresso block p-2"
                 value={dateRange}
                 onChange={(e) => setDateRange(e.target.value)}
               >
@@ -279,8 +286,8 @@ export default function AdminDashboard() {
                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#D4B06A" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#D4B06A" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -290,7 +297,7 @@ export default function AdminDashboard() {
                     contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     formatter={(value) => [`GH₵${(value as number)?.toFixed(2) ?? '0.00'}`, 'Revenue']}
                   />
-                  <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                  <Area type="monotone" dataKey="revenue" stroke="#3B241D" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -299,27 +306,27 @@ export default function AdminDashboard() {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
             <div className="space-y-3">
-              <Link href="/admin/products/new" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-blue-50 text-gray-700 hover:text-blue-700 rounded-lg transition-colors group">
+              <Link href="/admin/products/new" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-brand-nude/50 text-brand-cocoa hover:text-brand-espresso rounded-lg transition-colors group">
                 <div className="flex items-center font-medium">
-                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-blue-100 transition-colors shadow-sm">
+                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-brand-nude transition-colors shadow-sm">
                     <i className="ri-add-line"></i>
                   </span>
                   Add Product
                 </div>
                 <i className="ri-arrow-right-line"></i>
               </Link>
-              <Link href="/admin/pos" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-blue-50 text-gray-700 hover:text-blue-700 rounded-lg transition-colors group">
+              <Link href="/admin/pos" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-brand-nude/50 text-brand-cocoa hover:text-brand-espresso rounded-lg transition-colors group">
                 <div className="flex items-center font-medium">
-                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-blue-100 transition-colors shadow-sm">
+                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-brand-nude transition-colors shadow-sm">
                     <i className="ri-computer-line"></i>
                   </span>
                   Open POS
                 </div>
                 <i className="ri-arrow-right-line"></i>
               </Link>
-              <Link href="/admin/orders" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-blue-50 text-gray-700 hover:text-blue-700 rounded-lg transition-colors group">
+              <Link href="/admin/orders" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-brand-nude/50 text-brand-cocoa hover:text-brand-espresso rounded-lg transition-colors group">
                 <div className="flex items-center font-medium">
-                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-blue-100 transition-colors shadow-sm">
+                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-brand-nude transition-colors shadow-sm">
                     <i className="ri-file-list-line"></i>
                   </span>
                   Manage Orders
@@ -334,7 +341,7 @@ export default function AdminDashboard() {
           <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">Recent Orders</h2>
-              <Link href="/admin/orders" className="text-blue-700 hover:text-blue-800 font-medium text-sm whitespace-nowrap cursor-pointer">
+              <Link href="/admin/orders" className="text-brand-espresso hover:text-brand-cocoa font-medium text-sm whitespace-nowrap cursor-pointer">
                 View All <i className="ri-arrow-right-line ml-1"></i>
               </Link>
             </div>
@@ -357,7 +364,7 @@ export default function AdminDashboard() {
                     {recentOrders.map((order) => (
                       <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                         <td className="py-4 px-4">
-                          <Link href={`/admin/orders/${order.id}`} className="text-blue-700 hover:text-blue-800 font-medium whitespace-nowrap cursor-pointer">
+                          <Link href={`/admin/orders/${order.id}`} className="text-brand-espresso hover:text-brand-cocoa font-medium whitespace-nowrap cursor-pointer">
                             {order.displayId}
                           </Link>
                         </td>
@@ -401,7 +408,7 @@ export default function AdminDashboard() {
                   ))}
                 </div>
               )}
-              <Link href="/admin/products?filter=low-stock" className="block text-center mt-4 text-blue-700 hover:text-blue-800 font-medium text-sm whitespace-nowrap cursor-pointer">
+              <Link href="/admin/products?filter=low-stock" className="block text-center mt-4 text-brand-espresso hover:text-brand-cocoa font-medium text-sm whitespace-nowrap cursor-pointer">
                 View All Products <i className="ri-arrow-right-line ml-1"></i>
               </Link>
             </div>
@@ -411,7 +418,7 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 overflow-hidden">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900">Products</h2>
-            <Link href="/admin/products" className="text-blue-700 hover:text-blue-800 font-medium text-sm whitespace-nowrap cursor-pointer">
+            <Link href="/admin/products" className="text-brand-espresso hover:text-brand-cocoa font-medium text-sm whitespace-nowrap cursor-pointer">
               View All <i className="ri-arrow-right-line ml-1"></i>
             </Link>
           </div>
@@ -425,7 +432,7 @@ export default function AdminDashboard() {
                 <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{product.name}</h3>
                 <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
                   <span className="text-sm text-gray-600">Stock: {product.stock}</span>
-                  <Link href={`/admin/products/${product.id}`} className="text-blue-700 hover:text-blue-800 text-sm font-medium whitespace-nowrap cursor-pointer">
+                  <Link href={`/admin/products/${product.id}`} className="text-brand-espresso hover:text-brand-cocoa text-sm font-medium whitespace-nowrap cursor-pointer">
                     Edit <i className="ri-arrow-right-line ml-1"></i>
                   </Link>
                 </div>

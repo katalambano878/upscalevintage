@@ -119,8 +119,9 @@ export default function AdminCategoriesPage() {
         parent_id: formData.parent_id || null, // Handle empty string as null
         status: formData.status,
         metadata: {
-          featured: formData.featured
-        }
+          ...(showEditModal && editingCategory?.metadata ? editingCategory.metadata : {}),
+          featured: formData.featured,
+        },
       };
 
       if (showEditModal && editingCategory) {

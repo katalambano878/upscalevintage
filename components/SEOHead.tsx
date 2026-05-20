@@ -1,4 +1,23 @@
 import { Metadata } from 'next';
+import {
+  APP_TITLE,
+  BRAND_NAME,
+  TAGLINE,
+} from '@/lib/brand';
+import {
+  buildPageMetadata,
+  DEFAULT_DESCRIPTION,
+  DEFAULT_KEYWORDS,
+  SEO_ASSETS,
+  SITE_URL,
+  organizationJsonLd,
+  websiteJsonLd,
+  productJsonLd,
+  breadcrumbJsonLd,
+  type PageSeoKey,
+} from '@/lib/seo';
+
+export type { PageSeoKey };
 
 interface SEOProps {
   title?: string;
@@ -6,92 +25,29 @@ interface SEOProps {
   keywords?: string[];
   ogImage?: string;
   ogType?: 'website' | 'product' | 'article';
-  price?: number;
-  currency?: string;
-  availability?: string;
-  category?: string;
-  publishedTime?: string;
-  author?: string;
+  path?: string;
   noindex?: boolean;
 }
 
+/** @deprecated Prefer buildPageMetadata(pageKey) from @/lib/seo */
 export function generateMetadata({
-  title = 'TIWAA PERFUME STYLE HOUSE — Perfumes Wholesale & Retail',
-  description = 'I sell perfumes — wholesale and retail. Satellite, Accra. Call 054 501 0949 · WhatsApp 055 416 9992.',
+  title,
+  description = DEFAULT_DESCRIPTION,
   keywords = [],
   ogImage,
   ogType = 'website',
-  price,
-  currency = 'GHS',
-  availability,
-  category,
-  publishedTime,
-  author,
-  noindex = false
+  path = '/',
+  noindex = false,
 }: SEOProps): Metadata {
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tiwaperfumestyle.com';
-  const defaultOgImage = `${siteUrl}/tiwa%20logo.png`;
-  const resolvedOgImage = ogImage || defaultOgImage;
-  const siteName = 'TIWAA PERFUME STYLE HOUSE';
-  const fullTitle = title.includes(siteName) ? title : `${title} | ${siteName}`;
-
-  const defaultKeywords = [
-    'online shopping ghana',
-    'premium products ghana',
-    'buy online ghana',
-    'ecommerce ghana',
-    'fast delivery ghana',
-    'secure shopping'
-  ];
-
-  const allKeywords = [...new Set([...keywords, ...defaultKeywords])];
-
-  const metadata: Metadata = {
-    title: fullTitle,
+  return buildPageMetadata('shop', {
+    title: title ?? `Shop | ${APP_TITLE}`,
     description,
-    keywords: allKeywords.join(', '),
-    authors: author ? [{ name: author }] : undefined,
-    openGraph: {
-      title: fullTitle,
-      description,
-      images: [{ url: resolvedOgImage, width: 1200, height: 630, alt: title }],
-      type: ogType as any,
-      siteName,
-      locale: 'en_GH'
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: fullTitle,
-      description,
-      images: [resolvedOgImage]
-    },
-    robots: noindex ? {
-      index: false,
-      follow: false
-    } : {
-      index: true,
-      follow: true,
-      googleBot: {
-        index: true,
-        follow: true,
-        'max-image-preview': 'large',
-        'max-snippet': -1
-      }
-    },
-    alternates: {
-      canonical: siteUrl
-    }
-  };
-
-  if (ogType === 'article' && publishedTime) {
-    metadata.openGraph = {
-      ...metadata.openGraph,
-      type: 'article',
-      publishedTime
-    };
-  }
-
-  return metadata;
+    keywords: [...keywords],
+    path,
+    ogImage: ogImage ?? SEO_ASSETS.ogImage,
+    ogType: ogType === 'product' ? 'website' : ogType,
+    noindex,
+  });
 }
 
 export function generateProductSchema(product: {
@@ -101,107 +57,73 @@ export function generateProductSchema(product: {
   price: number;
   currency?: string;
   sku: string;
+  slug?: string;
   rating?: number;
   reviewCount?: number;
   availability?: string;
   brand?: string;
   category?: string;
 }) {
-  const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
+  const inStock = product.availability !== 'out_of_stock';
+  const base = productJsonLd({
     name: product.name,
     description: product.description,
-    image: product.image,
+    image: product.image.startsWith('http') ? product.image : `${SITE_URL}${product.image}`,
+    slug: product.slug || product.sku,
+    price: product.price,
+    currency: product.currency || 'GHS',
     sku: product.sku,
-    brand: {
-      '@type': 'Brand',
-      name: product.brand || 'PremiumShop'
-    },
-    offers: {
-      '@type': 'Offer',
-      price: product.price,
-      priceCurrency: product.currency || 'GHS',
-      availability: product.availability === 'in_stock'
-        ? 'https://schema.org/InStock'
-        : 'https://schema.org/OutOfStock',
-      url: typeof window !== 'undefined' ? window.location.href : '',
-      priceValidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    }
-  };
+    inStock,
+    brand: product.brand || BRAND_NAME,
+  });
 
   if (product.rating && product.reviewCount) {
-    (schema as any).aggregateRating = {
+    (base as Record<string, unknown>).aggregateRating = {
       '@type': 'AggregateRating',
       ratingValue: product.rating,
       reviewCount: product.reviewCount,
       bestRating: 5,
-      worstRating: 1
+      worstRating: 1,
     };
   }
 
   if (product.category) {
-    (schema as any).category = product.category;
+    (base as Record<string, unknown>).category = product.category;
   }
 
-  return schema;
+  return base;
 }
 
 export function generateBreadcrumbSchema(items: { name: string; url: string }[]) {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: items.map((item, index) => ({
-      '@type': 'ListItem',
-      position: index + 1,
+  return breadcrumbJsonLd(
+    items.map((item) => ({
       name: item.name,
-      item: item.url
+      path: item.url.replace(SITE_URL, '') || item.url,
     }))
-  };
+  );
 }
 
 export function generateOrganizationSchema() {
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tiwaperfumestyle.com';
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    name: 'TIWAA PERFUME STYLE HOUSE',
-    url: siteUrl,
-    logo: `${siteUrl}/tiwa%20logo.png`,
-    image: `${siteUrl}/tiwa%20logo.png`,
-    contactPoint: {
-      '@type': 'ContactPoint',
-      telephone: '+233545010949',
-      contactType: 'Customer Service',
-      areaServed: 'GH',
-      availableLanguage: ['English']
-    }
-  };
+  return organizationJsonLd();
 }
 
 export function generateWebsiteSchema() {
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tiwaperfumestyle.com';
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: 'TIWAA PERFUME STYLE HOUSE',
-    url: siteUrl,
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: {
-        '@type': 'EntryPoint',
-        urlTemplate: `${siteUrl}/shop?search={search_term_string}`
-      },
-      'query-input': 'required name=search_term_string'
-    }
-  };
+  return websiteJsonLd();
 }
 
-export function StructuredData({ data }: { data: any }) {
+export function StructuredData({ data }: { data: Record<string, unknown> | Record<string, unknown>[] }) {
+  const items = Array.isArray(data) ? data : [data];
   return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
-    />
+    <>
+      {items.map((schema, i) => (
+        <script
+          key={`${schema['@type'] as string}-${i}`}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+        />
+      ))}
+    </>
   );
 }
+
+export { buildPageMetadata, TAGLINE, BRAND_NAME, APP_TITLE, DEFAULT_KEYWORDS };

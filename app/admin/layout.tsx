@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import Logo from '@/components/Logo';
 
 export default function AdminLayout({
   children,
@@ -140,7 +141,14 @@ export default function AdminLayout({
   };
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Loading Admin...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-brand-cream text-brand-cocoa">
+        <div className="flex flex-col items-center gap-4">
+          <Logo className="h-12 w-auto object-contain opacity-90" />
+          <p className="text-sm font-medium">Loading admin…</p>
+        </div>
+      </div>
+    );
   }
 
   const menuItems = [
@@ -240,7 +248,7 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-brand-cream">
 
       {/* Mobile Overlay */}
       {isSidebarOpen && (
@@ -252,7 +260,7 @@ export default function AdminLayout({
 
       {/* Sidebar - Mobile: Transform / Desktop: Width transition */}
       <aside
-        className={`fixed top-0 left-0 z-40 h-screen bg-white border-r border-gray-200 transition-all duration-300
+        className={`fixed top-0 left-0 z-40 h-screen bg-brand-espresso border-r border-brand-cocoa/20 transition-all duration-300
           w-64
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
           ${isSidebarOpen ? 'lg:w-64' : 'lg:w-0 lg:overflow-hidden'}
@@ -260,9 +268,11 @@ export default function AdminLayout({
         `}
       >
         <div className="h-full px-4 py-6 overflow-y-auto">
-          <Link href="/admin" className="flex items-center mb-8 px-2 cursor-pointer">
-            <span className="text-xl font-['Pacifico'] text-blue-700">TIWAA PERFUME</span>
-            <span className="ml-3 text-sm font-semibold text-gray-500">ADMIN</span>
+          <Link href="/admin" className="flex items-center gap-3 mb-8 px-2 cursor-pointer group">
+            <Logo className="h-10 w-auto max-w-[140px] object-contain brightness-0 invert opacity-95 group-hover:opacity-100 transition-opacity" />
+            <span className="text-[10px] font-semibold tracking-[0.2em] text-brand-nude/80 uppercase shrink-0">
+              Admin
+            </span>
           </Link>
 
           <nav className="space-y-1">
@@ -274,8 +284,8 @@ export default function AdminLayout({
                   href={item.path}
                   onClick={() => window.innerWidth < 1024 && setIsSidebarOpen(false)} // Close on mobile click
                   className={`flex items-center justify-between px-4 py-3 rounded-lg transition-colors cursor-pointer ${isActive
-                    ? 'bg-blue-50 text-blue-700 font-semibold'
-                    : 'text-gray-700 hover:bg-gray-50'
+                    ? 'bg-brand-champagne/25 text-brand-nude font-semibold'
+                    : 'text-brand-nude/75 hover:bg-white/10 hover:text-brand-nude'
                     }`}
                 >
                   <div className="flex items-center space-x-3">
@@ -292,12 +302,12 @@ export default function AdminLayout({
             })}
           </nav>
 
-          <div className="mt-8 pt-8 border-t border-gray-200">
+          <div className="mt-8 pt-8 border-t border-white/15">
             <Link
               href="/"
               target="_blank"
               onClick={() => window.innerWidth < 1024 && setIsSidebarOpen(false)}
-              className="flex items-center space-x-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+              className="flex items-center space-x-3 px-4 py-3 text-brand-nude/75 hover:bg-white/10 hover:text-brand-nude rounded-lg transition-colors cursor-pointer"
             >
               <i className="ri-external-link-line text-xl w-5 h-5 flex items-center justify-center"></i>
               <span>View Store</span>
@@ -308,17 +318,17 @@ export default function AdminLayout({
 
       {/* Main Content */}
       <div className={`transition-all duration-300 ml-0 ${isSidebarOpen ? 'lg:ml-64' : 'lg:ml-0'}`}>
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+        <header className="bg-white/90 backdrop-blur-sm border-b border-brand-nude sticky top-0 z-30 shadow-sm">
           <div className="px-4 py-4 lg:px-6 flex items-center justify-between">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="w-10 h-10 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              className="w-10 h-10 flex items-center justify-center text-brand-cocoa hover:text-brand-espresso hover:bg-brand-nude/40 rounded-lg transition-colors cursor-pointer"
             >
               <i className={`${isSidebarOpen ? 'ri-menu-fold-line' : 'ri-menu-unfold-line'} text-xl`}></i>
             </button>
 
             <div className="flex items-center space-x-2 lg:space-x-4">
-              <button className="relative w-10 h-10 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer">
+              <button className="relative w-10 h-10 flex items-center justify-center text-brand-cocoa hover:text-brand-espresso hover:bg-brand-nude/40 rounded-lg transition-colors cursor-pointer">
                 <i className="ri-notification-3-line text-xl"></i>
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
               </button>
@@ -326,14 +336,14 @@ export default function AdminLayout({
               <div className="relative user-menu-container">
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center space-x-2 lg:space-x-3 px-2 lg:px-3 py-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                  className="flex items-center space-x-2 lg:space-x-3 px-2 lg:px-3 py-2 hover:bg-brand-nude/30 rounded-lg transition-colors cursor-pointer"
                 >
-                  <div className="w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full font-semibold">
+                  <div className="w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center bg-brand-nude text-brand-espresso rounded-full font-semibold">
                     {user?.email?.charAt(0).toUpperCase() || 'A'}
                   </div>
                   <div className="text-left hidden md:block">
-                    <p className="text-sm font-semibold text-gray-900 capitalize">{userRole || 'Admin'}</p>
-                    <p className="text-xs text-gray-500 max-w-[100px] truncate">{user?.email}</p>
+                    <p className="text-sm font-semibold text-brand-espresso capitalize">{userRole || 'Admin'}</p>
+                    <p className="text-xs text-brand-cocoa/70 max-w-[100px] truncate">{user?.email}</p>
                   </div>
                   <i className="ri-arrow-down-s-line text-gray-600"></i>
                 </button>

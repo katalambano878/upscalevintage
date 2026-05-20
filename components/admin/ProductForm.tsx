@@ -31,7 +31,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
     // Auto-generate SKU function
     const generateSku = () => {
-        const prefix = 'TIWAA'; // TIWAA PERFUME STYLE HOUSE
+        const prefix = 'YOUR_BRAND_NAME'; // YOUR_APP_TITLE
         const timestamp = Date.now().toString(36).toUpperCase().slice(-4);
         const random = Math.random().toString(36).substring(2, 6).toUpperCase();
         return `${prefix}-${timestamp}-${random}`;
@@ -517,16 +517,22 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 </div>
                             </div>
 
-                            <div className="flex items-center space-x-3">
-                                <input
-                                    type="checkbox"
-                                    checked={featured}
-                                    onChange={(e) => setFeatured(e.target.checked)}
-                                    className="w-5 h-5 text-blue-700 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                                />
-                                <label className="text-gray-900 font-medium">
-                                    Feature this product on homepage
-                                </label>
+                            <div className="space-y-1">
+                                <div className="flex items-center space-x-3">
+                                    <input
+                                        type="checkbox"
+                                        id="product-featured"
+                                        checked={featured}
+                                        onChange={(e) => setFeatured(e.target.checked)}
+                                        className="w-5 h-5 text-blue-700 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                    />
+                                    <label htmlFor="product-featured" className="text-gray-900 font-medium">
+                                        Show in Featured Products on homepage
+                                    </label>
+                                </div>
+                                <p className="text-sm text-gray-500 pl-8">
+                                    Product must be <strong>Active</strong> and have at least one image. Up to 8 appear on the homepage.
+                                </p>
                             </div>
 
                             <div>

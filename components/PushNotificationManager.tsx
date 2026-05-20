@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { LOGO_PATH } from '@/lib/brand';
 
 export default function PushNotificationManager() {
   const [permission, setPermission] = useState<NotificationPermission>('default');
@@ -39,8 +40,8 @@ export default function PushNotificationManager() {
 
         new Notification('Notifications Enabled! 🎉', {
           body: 'You will now receive updates about orders, deals, and more.',
-          icon: '/tiwa logo.png',
-          badge: '/tiwa logo.png',
+          icon: LOGO_PATH,
+          badge: LOGO_PATH,
           tag: 'welcome-notification'
         });
       }

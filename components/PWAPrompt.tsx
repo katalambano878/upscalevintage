@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePWAInstall } from './PWAInstaller';
+import { APP_TITLE, BRAND_NAME, LOGO_PATH } from '@/lib/brand';
 
 export default function PWAPrompt() {
   const [showPrompt, setShowPrompt] = useState(false);
@@ -53,16 +54,16 @@ export default function PWAPrompt() {
           <div className="px-6 pb-8">
             {/* App icon and info */}
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg flex-shrink-0 bg-blue-50 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-luxury flex-shrink-0 bg-brand-cream flex items-center justify-center p-1 border border-brand-nude">
                 <img
-                  src="/tiwa logo.png"
-                  alt="TIWAA PERFUME STYLE HOUSE"
-                  className="w-14 h-14 object-contain"
+                  src={LOGO_PATH}
+                  alt={BRAND_NAME}
+                  className="w-full h-full object-contain"
                 />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-gray-900 text-lg truncate">TIWAA PERFUME STYLE HOUSE</h3>
-                <p className="text-sm text-gray-500">tiwaperfumestyle.com</p>
+                <h3 className="font-bold text-gray-900 text-lg truncate">{APP_TITLE}</h3>
+                <p className="text-sm text-gray-500">yourdomain.com</p>
                 <div className="flex items-center gap-1 mt-1">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <i key={star} className="ri-star-fill text-amber-400 text-xs" />

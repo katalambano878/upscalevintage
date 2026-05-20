@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { APP_TITLE, BRAND_NAME, LOGO_PATH, TAGLINE } from '@/lib/brand';
 
 export default function PWASplash() {
   const [showSplash, setShowSplash] = useState(false);
@@ -29,17 +30,17 @@ export default function PWASplash() {
     <div className="pwa-splash" aria-hidden="true">
       <div className="pwa-splash-logo mb-6">
         <img
-          src="/tiwa logo.png"
-          alt="TIWAA PERFUME STYLE HOUSE"
-          className="w-24 h-24 object-contain brightness-0 invert"
+          src={LOGO_PATH}
+          alt={BRAND_NAME}
+          className="w-56 max-w-[85vw] h-auto object-contain"
         />
       </div>
-      <h1 className="text-white text-xl font-bold font-serif mb-2">TIWAA PERFUME STYLE HOUSE</h1>
-      <p className="text-blue-200 text-sm font-medium mb-8">Quality Products & Supplies</p>
+      <h1 className="text-brand-espresso text-lg font-bold font-serif mb-2 tracking-wide">{APP_TITLE}</h1>
+      <p className="text-brand-cocoa/70 text-sm font-medium mb-8">{TAGLINE}</p>
       <div className="pwa-splash-dots flex gap-1.5">
-        <span className="w-2 h-2 bg-white rounded-full" />
-        <span className="w-2 h-2 bg-white rounded-full" />
-        <span className="w-2 h-2 bg-white rounded-full" />
+        <span className="w-2 h-2 bg-brand-champagne rounded-full" />
+        <span className="w-2 h-2 bg-brand-champagne rounded-full" />
+        <span className="w-2 h-2 bg-brand-champagne rounded-full" />
       </div>
     </div>
   );
