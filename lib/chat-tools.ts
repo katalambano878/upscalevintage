@@ -135,6 +135,15 @@ export interface StoreCategory {
     description: string | null;
 }
 
+export interface CatalogSummaryItem {
+    name: string;
+    slug: string;
+    price: number;
+    inStock: boolean;
+    categoryName: string | null;
+    categorySlug: string | null;
+}
+
 /**
  * Returns every active category currently in the database. The chat route
  * injects this list into the system prompt so the AI always grounds its
@@ -159,6 +168,42 @@ export async function getStoreCategories(supabase: any): Promise<StoreCategory[]
         slug: c.slug,
         description: c.description || null,
     }));
+}
+
+/**
+ * Returns a compact summary of every active product (capped at `limit`,
+ * default 60) along with its category so the AI knows the live catalog at
+ * a glance. Used to ground answers about whether specific items are
+ * available without triggering a full search_products tool call for every
+ * yes/no question.
+ */
+export async function getStoreCatalogSummary(supabase: any, limit = 60): Promise<CatalogSummaryItem[]> {
+    const { data, error } = await supabase
+        .from('products')
+        .select(`
+            name, slug, price, quantity,
+            category:categories (name, slug)
+        `)
+        .eq('status', 'active')
+        .order('rating_avg', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+    if (error) {
+        console.error('[ChatTools] getStoreCatalogSummary error:', error);
+        return [];
+    }
+    return (data || []).map((p: any) => {
+        const cat = Array.isArray(p.category) ? p.category[0] : p.category;
+        return {
+            name: p.name,
+            slug: p.slug,
+            price: Number(p.price) || 0,
+            inStock: (p.quantity ?? 0) > 0,
+            categoryName: cat?.name ?? null,
+            categorySlug: cat?.slug ?? null,
+        };
+    });
 }
 
 /**
