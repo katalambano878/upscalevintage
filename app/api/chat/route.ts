@@ -13,6 +13,7 @@ import {
     getCustomerProfile,
     createChatOrder,
     getStoreCategories,
+    getStoreCatalogSummary,
     type ChatProduct,
     type ChatOrder,
     type ChatCoupon,
@@ -20,6 +21,7 @@ import {
     type ChatReturn,
     type ChatCustomerProfile,
     type StoreCategory,
+    type CatalogSummaryItem,
 } from '@/lib/chat-tools';
 import { searchSiteKnowledge, getSiteMapSummary } from '@/lib/site-knowledge';
 import {
@@ -321,6 +323,7 @@ function buildSystemPrompt(
     profile: ChatCustomerProfile | null,
     pagePath?: string,
     categories: StoreCategory[] = [],
+    catalog: CatalogSummaryItem[] = [],
 ): string {
     const now = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -332,14 +335,14 @@ ABSOLUTE RULES — NEVER BREAK THESE:
 - NEVER output markdown headers (##) in your responses. Use plain text with bold (**) for emphasis if needed.
 
 PRODUCT & CATEGORY RULES — THE MOST IMPORTANT RULES:
-- The "OUR CATEGORIES (LIVE)" section below is the ONLY source of truth for what categories the store carries. If a category is in that list, the store carries it. If it is not, the store does not currently have a category for it.
-- BEFORE answering ANY "do you sell / carry / import / have X?" question, you MUST scan OUR CATEGORIES (LIVE) for a matching category — including singular/plural variants and synonyms (e.g. "cars" → "Car Deals", "fashion" → "Fashion Picks", "bag" → "Bags & Accessories"). If there is a match, the answer is YES — confirm we carry it and call search_products.
-- NEVER claim the store does NOT sell, carry, or import a type of product without first checking OUR CATEGORIES and calling search_products. Do not deny availability based on assumptions.
-- NEVER paraphrase a fictional list of categories ("we focus on fashion, home appliances, accessories…"). The ONLY categories you may name are those in OUR CATEGORIES (LIVE).
-- If a previous assistant message in this conversation denied availability of something that is actually in OUR CATEGORIES, that previous answer was wrong. Correct yourself in your next reply, then proceed to help.
-- You are ONLY allowed to mention specific product names, brands and prices that came from a tool result (search_products or get_recommendations). Every product detail you mention MUST come from the tool response data.
-- BEFORE mentioning ANY specific product, you MUST call search_products or get_recommendations. NEVER skip the tool call.
-- If the tool returns NO results for what the customer asked but the category exists in OUR CATEGORIES, say something like "We do have a [category] section — let me check what's currently in stock" and try again or recommend related items via get_recommendations.
+- Two sections below — "OUR CATEGORIES (LIVE)" and "OUR PRODUCTS (LIVE)" — are the ONLY source of truth for what this store carries. If something appears in either list, the store carries it. If nothing matches, the store does not currently have it.
+- BEFORE answering ANY "do you sell / carry / import / have X?" question, you MUST scan BOTH lists for a match — including singular/plural variants and synonyms (e.g. "cars" → "Car Deals" + "Jetour SUV", "fashion" → "Fashion Picks", "bag" → "Bags & Accessories" + "Chain Shoulder Bag"). If there is a match, the answer is YES — confirm we carry it and call search_products to surface the rich product card.
+- NEVER claim the store does NOT sell something without first checking BOTH lists and calling search_products. Do not deny availability based on assumptions or training knowledge.
+- NEVER paraphrase a fictional list of categories ("we focus on fashion, home appliances, accessories…"). The ONLY categories or product types you may name are those that appear in OUR CATEGORIES (LIVE) or OUR PRODUCTS (LIVE).
+- If a previous assistant message in this conversation denied availability of something that is actually in OUR CATEGORIES or OUR PRODUCTS, that previous answer was wrong. Correct yourself in your next reply, then proceed to help.
+- You are ONLY allowed to mention specific product names, brands and prices that came from a tool result (search_products or get_recommendations) OR from the OUR PRODUCTS list. Either way, the database is the source.
+- BEFORE displaying any product card to the customer you MUST call search_products or get_recommendations so the frontend has the full product data. The OUR PRODUCTS list above is for grounding your YES/NO answers; the tool call is what surfaces the visual card.
+- If the tool returns NO results for what the customer asked but a category or product exists in the live lists, say something like "We do have it — let me pull that up" and call search_products again with a different query (the singular form, the product name, or the category name).
 - NEVER add extra products from your training knowledge, even if you "know" they exist. The database is the only truth.
 - NEVER describe what a product does or its features UNLESS that information is in the tool result data.
 - When tool results include an "instruction" field, follow it exactly.
@@ -444,6 +447,27 @@ ${getSiteMapSummary()}`;
             prompt += `\n- **${c.name}** (/categories/${c.slug})${desc}`;
         }
         prompt += `\nIf a customer asks whether we carry something, check if it fits any of these categories before answering. The store carries everything in this list. If they ask for a specific product, call search_products — it understands category names too.`;
+    }
+
+    // Live database product catalog snapshot — names + slugs grouped by
+    // category so the AI can answer "do you sell X?" with confidence even
+    // before calling search_products. Capped to keep the prompt small.
+    if (catalog.length > 0) {
+        const byCategory = new Map<string, CatalogSummaryItem[]>();
+        for (const item of catalog) {
+            const key = item.categoryName || 'Uncategorized';
+            if (!byCategory.has(key)) byCategory.set(key, []);
+            byCategory.get(key)!.push(item);
+        }
+        prompt += `\n\nOUR PRODUCTS (LIVE — ${catalog.length} active item${catalog.length === 1 ? '' : 's'} in stock or backorder):`;
+        for (const [catName, items] of byCategory) {
+            prompt += `\n${catName}:`;
+            for (const it of items) {
+                const stockTag = it.inStock ? '' : ' [out of stock]';
+                prompt += `\n  • ${it.name} — GH₵${it.price.toFixed(2)} (/product/${it.slug})${stockTag}`;
+            }
+        }
+        prompt += `\nThis is the FULL list of products you may discuss. If a product the customer mentions matches one of these (even loosely), confirm we have it and call search_products to surface the rich product card. If nothing here matches, say so honestly and suggest browsing /shop.`;
     }
 
     if (profile) {
@@ -593,10 +617,14 @@ export async function POST(request: Request) {
         // simple ILIKE OR-search over title and content.
         const kbContext = await fetchKnowledgeBaseContext(supabaseWriter, userText);
 
-        // Pull live categories so the AI never has to guess what the store
-        // carries. This is the single source of truth that gets injected into
-        // the system prompt below.
-        const categories = await getStoreCategories(supabase);
+        // Pull live categories AND a compact product catalog snapshot so the
+        // AI never has to guess what the store carries — at the category
+        // level OR the individual product level. Both get injected into the
+        // system prompt below.
+        const [categories, catalog] = await Promise.all([
+            getStoreCategories(supabase),
+            getStoreCatalogSummary(supabase),
+        ]);
 
         let result: any;
         if (groqKey) {
@@ -615,6 +643,7 @@ export async function POST(request: Request) {
                 cartItems,
                 clientIp,
                 categories,
+                catalog,
             );
         } else {
             result = await handleWithoutAI(supabase, userText, profile);
@@ -795,8 +824,9 @@ async function handleWithAI(
     cartItems?: { id: string; name: string; price: number; quantity: number; slug: string }[],
     clientIp?: string,
     categories: StoreCategory[] = [],
+    catalog: CatalogSummaryItem[] = [],
 ) {
-    let systemPrompt = buildSystemPrompt(profile, pagePath, categories);
+    let systemPrompt = buildSystemPrompt(profile, pagePath, categories, catalog);
 
     // Inject site-knowledge hits for instant context
     const siteHits = searchSiteKnowledge(userText, 2);
