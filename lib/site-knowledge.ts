@@ -33,7 +33,7 @@ export const SITE_KNOWLEDGE: SiteKnowledgeEntry[] = [
         title: `About ${BRAND_NAME}`,
         path: '/about',
         category: 'company',
-        content: `${BRAND_NAME} — ${TAGLINE} We curate trending fashion, bags, accessories, home appliances, beauty picks and special imports. Based in Accra, Ghana with delivery nationwide.`,
+        content: `${BRAND_NAME} — ${TAGLINE} Based in Accra, Ghana with delivery nationwide. The exact list of categories we carry is fetched live from the database and provided to the assistant in the OUR CATEGORIES section.`,
         keywords: ['about', 'who', 'brand', 'mission', 'company', 'upscale', 'vintage', 'store'],
     },
     {
@@ -81,8 +81,8 @@ export const SITE_KNOWLEDGE: SiteKnowledgeEntry[] = [
         title: 'Categories',
         path: '/categories',
         category: 'shopping',
-        content: 'We carry Fashion, Bags & Accessories, Lifestyle Finds, Trending Imports, Beauty & Care, Home Appliances and Car Deals. Browse all at /categories.',
-        keywords: ['category', 'categories', 'fashion', 'bags', 'beauty', 'appliances', 'cars', 'imports'],
+        content: 'Browse all categories at /categories. The current list of categories is provided to the assistant separately in the live OUR CATEGORIES section of the system prompt — never list categories from this static text; always defer to the live list.',
+        keywords: ['category', 'categories', 'browse', 'sections', 'departments'],
     },
     {
         id: 'track-order',

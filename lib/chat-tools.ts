@@ -93,6 +93,41 @@ const PRODUCT_SELECT = `
   product_images(url, position)
 `;
 
+// ─── 0. Get Store Categories (ground truth for the AI) ─────────────────────
+
+export interface StoreCategory {
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+}
+
+/**
+ * Returns every active category currently in the database. The chat route
+ * injects this list into the system prompt so the AI always grounds its
+ * answers about "what do you sell?" / "do you carry X?" in the real catalog
+ * rather than guessing from the brand description.
+ */
+export async function getStoreCategories(supabase: any): Promise<StoreCategory[]> {
+    const { data, error } = await supabase
+        .from('categories')
+        .select('id, name, slug, description')
+        .eq('status', 'active')
+        .order('position', { ascending: true, nullsFirst: false })
+        .order('name', { ascending: true });
+
+    if (error) {
+        console.error('[ChatTools] getStoreCategories error:', error);
+        return [];
+    }
+    return (data || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        description: c.description || null,
+    }));
+}
+
 /**
  * Compute the best (lowest) effective price for a product, considering its
  * variants and any compare_at_price set on the product itself.
