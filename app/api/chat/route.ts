@@ -609,14 +609,13 @@ export async function POST(request: Request) {
         }
 
         if (userId || userEmail) {
-            supabaseWriter
-                .rpc('upsert_customer_insight', {
+            Promise.resolve(
+                supabaseWriter.rpc('upsert_customer_insight', {
                     p_customer_id: userId || null,
                     p_customer_email: userEmail || null,
                     p_customer_name: profile?.name || null,
-                })
-                .then(() => undefined)
-                .catch(() => undefined);
+                }),
+            ).catch(() => undefined);
         }
 
         return NextResponse.json(result);
