@@ -12,12 +12,14 @@ import {
     getStoreInfo,
     getCustomerProfile,
     createChatOrder,
+    getStoreCategories,
     type ChatProduct,
     type ChatOrder,
     type ChatCoupon,
     type ChatTicket,
     type ChatReturn,
     type ChatCustomerProfile,
+    type StoreCategory,
 } from '@/lib/chat-tools';
 import { searchSiteKnowledge, getSiteMapSummary } from '@/lib/site-knowledge';
 import {
@@ -315,23 +317,29 @@ const LLM_TOOLS = [
 
 // ─── System Prompt Builder ──────────────────────────────────────────────────
 
-function buildSystemPrompt(profile: ChatCustomerProfile | null, pagePath?: string): string {
+function buildSystemPrompt(
+    profile: ChatCustomerProfile | null,
+    pagePath?: string,
+    categories: StoreCategory[] = [],
+): string {
     const now = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-    let prompt = `You are the AI shopping assistant for ${BRAND_NAME} — ${TAGLINE} We curate trending fashion, bags, accessories, lifestyle finds, beauty picks, home appliances and special imports in Ghana. Today is ${now}.
+    let prompt = `You are the AI shopping assistant for ${BRAND_NAME} — ${TAGLINE} Today is ${now}.
 
 ABSOLUTE RULES — NEVER BREAK THESE:
 - NEVER show your internal reasoning, thinking steps, chain-of-thought, or planning process. NEVER output anything like "Step 1:", "## Step", "Let me think", or similar. Only output the final customer-facing response.
 - NEVER list your available tools or describe how you will use them. Just use them silently and respond with the result.
 - NEVER output markdown headers (##) in your responses. Use plain text with bold (**) for emphasis if needed.
 
-PRODUCT RULES — THE MOST IMPORTANT RULES:
-- You are ONLY allowed to mention products that appear in a tool result (search_products or get_recommendations). Every product name, brand name and price you mention MUST come from the tool response data.
-- BEFORE mentioning ANY product, you MUST call search_products or get_recommendations. NEVER skip the tool call. NEVER respond about products without calling a tool first.
-- If the tool returns results, ONLY mention products from that response. Do NOT add extra products from your training knowledge, even if you "know" they exist.
-- If the tool returns NO results for what the customer asked, the tool will automatically provide alternative products from our store. Recommend THOSE alternatives instead. Say something like "We don't carry [what they asked for], but here are some products you might like:" and list the alternatives from the tool result.
-- NEVER say a product name that did not come from a tool result. This includes well-known brands — if the tool didn't return it, do NOT mention it.
-- NEVER describe what a product does or its features UNLESS that information is in the tool result data. You only know what the database tells you.
+PRODUCT & CATEGORY RULES — THE MOST IMPORTANT RULES:
+- The "OUR CATEGORIES (LIVE)" section below is the ONLY source of truth for what categories the store carries. If a category is in that list, the store carries it. If it is not, the store does not currently have a category for it.
+- NEVER claim the store does NOT sell, carry, or import a type of product without first checking OUR CATEGORIES and (if needed) calling the search_products tool. Do not deny availability based on assumptions.
+- You are ONLY allowed to mention specific product names, brands and prices that came from a tool result (search_products or get_recommendations). Every product detail you mention MUST come from the tool response data.
+- BEFORE mentioning ANY specific product, you MUST call search_products or get_recommendations. NEVER skip the tool call.
+- If the tool returns NO results for what the customer asked but the category exists in OUR CATEGORIES, say something like "We do have a [category] section — let me check what's currently in stock" and try again or recommend related items via get_recommendations.
+- If a customer asks "do you sell X?" and X clearly fits one of OUR CATEGORIES, the answer is YES — confirm we carry that category, then call search_products to surface specific items.
+- NEVER add extra products from your training knowledge, even if you "know" they exist. The database is the only truth.
+- NEVER describe what a product does or its features UNLESS that information is in the tool result data.
 - When tool results include an "instruction" field, follow it exactly.
 
 CORE BEHAVIORS:
@@ -423,6 +431,18 @@ If you genuinely cannot answer a question or resolve an issue, you MUST do TWO t
 Never leave a customer stuck without a path forward.
 
 ${getSiteMapSummary()}`;
+
+    // Live database categories — appended last so they're the most recent
+    // grounding signal in the prompt and the AI doesn't have to scroll past
+    // policy text to find the truth about what we sell.
+    if (categories.length > 0) {
+        prompt += `\n\nOUR CATEGORIES (LIVE — single source of truth for what we carry):`;
+        for (const c of categories) {
+            const desc = c.description?.trim() ? ` — ${c.description.trim()}` : '';
+            prompt += `\n- **${c.name}** (/categories/${c.slug})${desc}`;
+        }
+        prompt += `\nIf a customer asks whether we carry something, check if it fits any of these categories before answering. The store carries everything in this list. If they ask for a specific product, call search_products — it understands category names too.`;
+    }
 
     if (profile) {
         prompt += `\n\nCUSTOMER CONTEXT (logged in):
@@ -571,6 +591,11 @@ export async function POST(request: Request) {
         // simple ILIKE OR-search over title and content.
         const kbContext = await fetchKnowledgeBaseContext(supabaseWriter, userText);
 
+        // Pull live categories so the AI never has to guess what the store
+        // carries. This is the single source of truth that gets injected into
+        // the system prompt below.
+        const categories = await getStoreCategories(supabase);
+
         let result: any;
         if (groqKey) {
             result = await handleWithAI(
@@ -587,6 +612,7 @@ export async function POST(request: Request) {
                 kbContext,
                 cartItems,
                 clientIp,
+                categories,
             );
         } else {
             result = await handleWithoutAI(supabase, userText, profile);
@@ -766,8 +792,9 @@ async function handleWithAI(
     kbContext?: string,
     cartItems?: { id: string; name: string; price: number; quantity: number; slug: string }[],
     clientIp?: string,
+    categories: StoreCategory[] = [],
 ) {
-    let systemPrompt = buildSystemPrompt(profile, pagePath);
+    let systemPrompt = buildSystemPrompt(profile, pagePath, categories);
 
     // Inject site-knowledge hits for instant context
     const siteHits = searchSiteKnowledge(userText, 2);
@@ -865,6 +892,7 @@ async function handleWithAI(
                     userEmail,
                     profile,
                     clientIp,
+                    categories,
                 );
 
                 if (toolResult.products) allProducts.push(...toolResult.products);
@@ -953,6 +981,43 @@ async function handleWithAI(
 
 // ─── Tool Call Executor ─────────────────────────────────────────────────────
 
+// ─── Tool Execution ─────────────────────────────────────────────────────────
+
+/**
+ * Try to match a free-text query to a live category. Compares the lowercased
+ * query against each category's name, slug and description. Returns the first
+ * category whose name/slug shares a non-trivial token with the query, OR
+ * whose name appears as a substring of the query (or vice versa). Used to
+ * prevent the AI from claiming we don't carry something that's actually a
+ * category in our DB.
+ */
+function findMatchingCategory(query: string, categories: StoreCategory[]): StoreCategory | null {
+    const q = (query || '').toLowerCase().trim();
+    if (!q || categories.length === 0) return null;
+
+    const tokens = q
+        .split(/\s+/)
+        .map((t) => t.replace(/[^a-z0-9]/g, ''))
+        .filter((t) => t.length > 2);
+
+    for (const c of categories) {
+        const name = c.name.toLowerCase();
+        const slug = c.slug.toLowerCase();
+        if (name.includes(q) || q.includes(name)) return c;
+        if (slug.includes(q) || q.includes(slug)) return c;
+
+        const catTokens = (name + ' ' + slug).split(/[^a-z0-9]+/).filter((t) => t.length > 2);
+        for (const qt of tokens) {
+            for (const ct of catTokens) {
+                if (ct === qt) return c;
+                // Handle simple plural/singular ("car" vs "cars")
+                if (ct.length > 3 && qt.length > 3 && (ct.startsWith(qt) || qt.startsWith(ct))) return c;
+            }
+        }
+    }
+    return null;
+}
+
 async function executeToolCall(
     supabase: any,
     supabaseWriter: any,
@@ -962,6 +1027,7 @@ async function executeToolCall(
     userEmail: string | null,
     profile: ChatCustomerProfile | null,
     clientIp?: string,
+    categories: StoreCategory[] = [],
 ): Promise<{
     data: any;
     products?: ChatProduct[];
@@ -976,7 +1042,35 @@ async function executeToolCall(
         case 'search_products': {
             const products = await searchProducts(supabase, args.query, 4);
             if (products.length === 0) {
+                // Before declaring "we don't carry it", see if the query
+                // actually matches one of our live categories. If it does,
+                // the customer was right — the category exists; we just
+                // happen to have no products currently in stock for it.
+                const matchedCategory = findMatchingCategory(args.query, categories);
                 const alternatives = await getRecommendations(supabase);
+                if (matchedCategory) {
+                    return {
+                        data: {
+                            found: 0,
+                            results: [],
+                            category_match: {
+                                name: matchedCategory.name,
+                                slug: matchedCategory.slug,
+                                url: `/categories/${matchedCategory.slug}`,
+                            },
+                            instruction:
+                                `Yes — we DO have a "${matchedCategory.name}" category at /categories/${matchedCategory.slug}. ` +
+                                `No specific products matched the query "${args.query}" right now (stock may be limited). ` +
+                                `Confirm to the customer that we carry this category, point them to /categories/${matchedCategory.slug}, ` +
+                                `and offer to show related items from the alternatives below. ` +
+                                `DO NOT tell the customer we don't sell or import this — we do.`,
+                            alternatives: alternatives.map((p) => ({ name: p.name, price: p.price, inStock: p.inStock, slug: p.slug })),
+                            alternatives_instruction: 'You may mention these alternatives if the customer wants to see related products.',
+                        },
+                        products: alternatives,
+                        quickReplies: [`Show ${matchedCategory.name}`, 'Contact us', 'Show me something else'],
+                    };
+                }
                 if (alternatives.length > 0) {
                     return {
                         data: {
