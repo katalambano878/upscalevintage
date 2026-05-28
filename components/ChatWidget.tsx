@@ -637,9 +637,9 @@ export default function ChatWidget() {
                 <div
                     className={
                         'fixed bottom-[5.5rem] z-[9998] flex flex-col overflow-hidden rounded-2xl border border-brand-nude bg-white shadow-2xl ' +
-                        'left-1/2 w-[min(calc(100vw-1.5rem),22rem)] -translate-x-1/2 ' +
+                        'left-3 right-3 mx-auto max-w-[22rem] ' +
                         'h-[min(70vh,32rem)] max-h-[32rem] ' +
-                        'sm:left-auto sm:right-4 sm:translate-x-0 sm:w-[400px] sm:bottom-6 ' +
+                        'sm:left-auto sm:right-4 sm:mx-0 sm:max-w-none sm:w-[400px] sm:bottom-6 ' +
                         'sm:h-[min(75vh,600px)] sm:max-h-[600px]'
                     }
                     role="dialog"
