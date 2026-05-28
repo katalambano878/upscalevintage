@@ -142,6 +142,31 @@ export const RATE_LIMITS = {
     windowSeconds: 3600 // 5 imports per hour
   },
 
+  // AI chat - per-session limit (allows steady conversation)
+  chat: {
+    maxRequests: 20,
+    windowSeconds: 60 // 20 chat messages per minute
+  },
+
+  // AI chat - per-IP burst cap (prevents an attacker rotating sessionId values
+  // to drain the LLM budget)
+  chatBurst: {
+    maxRequests: 80,
+    windowSeconds: 60 * 10 // 80 chat messages per 10 minutes per IP
+  },
+
+  // Speech-to-text - per IP (audio is expensive)
+  transcribe: {
+    maxRequests: 12,
+    windowSeconds: 60 // 12 transcriptions per minute
+  },
+
+  // Text-to-speech - per IP
+  speak: {
+    maxRequests: 20,
+    windowSeconds: 60 // 20 TTS calls per minute
+  },
+
   // General API - default limits
   default: {
     maxRequests: 100,
