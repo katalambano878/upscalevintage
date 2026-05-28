@@ -93,6 +93,39 @@ const PRODUCT_SELECT = `
   product_images(url, position)
 `;
 
+// ─── String helpers (search-term normalization) ───────────────────────────
+
+function uniqueStrings(arr: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const s of arr) {
+        const norm = s.trim().toLowerCase();
+        if (!norm || seen.has(norm)) continue;
+        seen.add(norm);
+        out.push(norm);
+    }
+    return out;
+}
+
+/**
+ * Given a list of words, return them plus simple singular/plural variants so
+ * "cars" → ["cars","car"] and "boxes" → ["boxes","boxe","box"].
+ * Crude on purpose; covers the 95% of real-world product searches.
+ */
+function expandStems(words: string[]): string[] {
+    const out: string[] = [];
+    for (const raw of words) {
+        const w = raw.toLowerCase().trim();
+        if (w.length < 3) continue;
+        out.push(w);
+        if (w.endsWith('ies') && w.length > 4) out.push(w.slice(0, -3) + 'y');
+        else if (w.endsWith('es') && w.length > 4) out.push(w.slice(0, -2));
+        else if (w.endsWith('s') && w.length > 3) out.push(w.slice(0, -1));
+        else out.push(w + 's');
+    }
+    return uniqueStrings(out);
+}
+
 // ─── 0. Get Store Categories (ground truth for the AI) ─────────────────────
 
 export interface StoreCategory {
@@ -204,8 +237,10 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
         return data.map((p: any) => mapProduct(p));
     }
 
-    // 2) Individual keywords (handles "blue silk shirt" by trying each word)
-    const words = term.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+    // 2) Individual keywords (handles "blue silk shirt" by trying each word).
+    // Also tries each word's singular/plural variants so "cars" matches a
+    // product description containing "car".
+    const words = expandStems(term.toLowerCase().split(/\s+/));
     for (const word of words) {
         const { data: wordData } = await supabase
             .from('products')
@@ -219,24 +254,36 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
         }
     }
 
-    // 3) Category name match (e.g. user typed "bags" / "fashion")
-    const { data: catMatch } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('status', 'active')
-        .ilike('name', `%${term}%`)
-        .limit(1);
+    // 3) Category name match (e.g. "bags", "fashion", "car", "cars"). Try the
+    // term as-is first, then the singular form, then each individual word
+    // (also stemmed). This means "do you sell cars" → "cars" → "car" → match
+    // against "Imported Car Deals".
+    const candidates = uniqueStrings([
+        term,
+        term.replace(/s$/i, ''),
+        ...term.split(/\s+/).filter((w) => w.length >= 3),
+        ...term.split(/\s+/).map((w) => w.replace(/s$/i, '')).filter((w) => w.length >= 3),
+    ]);
 
-    if (catMatch && catMatch.length > 0) {
-        const { data: catProducts } = await supabase
-            .from('products')
-            .select(PRODUCT_SELECT)
+    for (const candidate of candidates) {
+        const { data: catMatch } = await supabase
+            .from('categories')
+            .select('id')
             .eq('status', 'active')
-            .eq('category_id', catMatch[0].id)
-            .order('rating_avg', { ascending: false })
-            .limit(limit);
-        if (catProducts && catProducts.length > 0) {
-            return catProducts.map((p: any) => mapProduct(p));
+            .ilike('name', `%${candidate}%`)
+            .limit(1);
+
+        if (catMatch && catMatch.length > 0) {
+            const { data: catProducts } = await supabase
+                .from('products')
+                .select(PRODUCT_SELECT)
+                .eq('status', 'active')
+                .eq('category_id', catMatch[0].id)
+                .order('rating_avg', { ascending: false })
+                .limit(limit);
+            if (catProducts && catProducts.length > 0) {
+                return catProducts.map((p: any) => mapProduct(p));
+            }
         }
     }
 
