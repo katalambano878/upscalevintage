@@ -333,11 +333,13 @@ ABSOLUTE RULES — NEVER BREAK THESE:
 
 PRODUCT & CATEGORY RULES — THE MOST IMPORTANT RULES:
 - The "OUR CATEGORIES (LIVE)" section below is the ONLY source of truth for what categories the store carries. If a category is in that list, the store carries it. If it is not, the store does not currently have a category for it.
-- NEVER claim the store does NOT sell, carry, or import a type of product without first checking OUR CATEGORIES and (if needed) calling the search_products tool. Do not deny availability based on assumptions.
+- BEFORE answering ANY "do you sell / carry / import / have X?" question, you MUST scan OUR CATEGORIES (LIVE) for a matching category — including singular/plural variants and synonyms (e.g. "cars" → "Car Deals", "fashion" → "Fashion Picks", "bag" → "Bags & Accessories"). If there is a match, the answer is YES — confirm we carry it and call search_products.
+- NEVER claim the store does NOT sell, carry, or import a type of product without first checking OUR CATEGORIES and calling search_products. Do not deny availability based on assumptions.
+- NEVER paraphrase a fictional list of categories ("we focus on fashion, home appliances, accessories…"). The ONLY categories you may name are those in OUR CATEGORIES (LIVE).
+- If a previous assistant message in this conversation denied availability of something that is actually in OUR CATEGORIES, that previous answer was wrong. Correct yourself in your next reply, then proceed to help.
 - You are ONLY allowed to mention specific product names, brands and prices that came from a tool result (search_products or get_recommendations). Every product detail you mention MUST come from the tool response data.
 - BEFORE mentioning ANY specific product, you MUST call search_products or get_recommendations. NEVER skip the tool call.
 - If the tool returns NO results for what the customer asked but the category exists in OUR CATEGORIES, say something like "We do have a [category] section — let me check what's currently in stock" and try again or recommend related items via get_recommendations.
-- If a customer asks "do you sell X?" and X clearly fits one of OUR CATEGORIES, the answer is YES — confirm we carry that category, then call search_products to surface specific items.
 - NEVER add extra products from your training knowledge, even if you "know" they exist. The database is the only truth.
 - NEVER describe what a product does or its features UNLESS that information is in the tool result data.
 - When tool results include an "instruction" field, follow it exactly.
@@ -985,9 +987,8 @@ async function handleWithAI(
 
 /**
  * Try to match a free-text query to a live category. Compares the lowercased
- * query against each category's name, slug and description. Returns the first
- * category whose name/slug shares a non-trivial token with the query, OR
- * whose name appears as a substring of the query (or vice versa). Used to
+ * query against each category's name and slug, with simple singular/plural
+ * stemming so "cars" matches "Imported Car Deals" and vice versa. Used to
  * prevent the AI from claiming we don't carry something that's actually a
  * category in our DB.
  */
@@ -995,24 +996,36 @@ function findMatchingCategory(query: string, categories: StoreCategory[]): Store
     const q = (query || '').toLowerCase().trim();
     if (!q || categories.length === 0) return null;
 
-    const tokens = q
-        .split(/\s+/)
-        .map((t) => t.replace(/[^a-z0-9]/g, ''))
-        .filter((t) => t.length > 2);
+    const stem = (w: string) => {
+        const x = w.toLowerCase();
+        if (x.length < 3) return x;
+        if (x.endsWith('ies') && x.length > 4) return x.slice(0, -3) + 'y';
+        if (x.endsWith('es') && x.length > 4) return x.slice(0, -2);
+        if (x.endsWith('s') && x.length > 3) return x.slice(0, -1);
+        return x;
+    };
+
+    const queryStem = stem(q);
+    const queryTokens = q.split(/\s+/).map(stem).filter((t) => t.length >= 3);
 
     for (const c of categories) {
         const name = c.name.toLowerCase();
         const slug = c.slug.toLowerCase();
+        const nameStem = name.split(/\s+/).map(stem).join(' ');
+        const slugStem = slug.split(/[-_]+/).map(stem).join('-');
+
         if (name.includes(q) || q.includes(name)) return c;
         if (slug.includes(q) || q.includes(slug)) return c;
+        if (nameStem.includes(queryStem) || queryStem.includes(nameStem)) return c;
+        if (slugStem.includes(queryStem) || queryStem.includes(slugStem)) return c;
 
-        const catTokens = (name + ' ' + slug).split(/[^a-z0-9]+/).filter((t) => t.length > 2);
-        for (const qt of tokens) {
-            for (const ct of catTokens) {
-                if (ct === qt) return c;
-                // Handle simple plural/singular ("car" vs "cars")
-                if (ct.length > 3 && qt.length > 3 && (ct.startsWith(qt) || qt.startsWith(ct))) return c;
-            }
+        const catTokens = (name + ' ' + slug)
+            .split(/[^a-z0-9]+/)
+            .map(stem)
+            .filter((t) => t.length >= 3);
+
+        for (const qt of queryTokens) {
+            if (catTokens.includes(qt)) return c;
         }
     }
     return null;
