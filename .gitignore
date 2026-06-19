@@ -23,12 +23,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Local Env Files
+# Env files — never commit any .env variant.
+# .env.example contained real secrets in early history; keep it out of the
+# repo until/unless someone writes a fully sanitized placeholder version.
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.types
+.env.example
 
 # Vercel
 .vercel
