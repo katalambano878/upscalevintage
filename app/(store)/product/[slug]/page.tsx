@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import ProductDetailClient from './ProductDetailClient';
 import { BRAND_NAME, APP_TITLE } from '@/lib/brand';
-import { SEO_ASSETS, SITE_URL } from '@/lib/seo';
+import { SEO_ASSETS, SITE_URL, productJsonLd, breadcrumbJsonLd } from '@/lib/seo';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -82,5 +82,79 @@ export async function generateMetadata({
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  return <ProductDetailClient slug={slug} />;
+  const supabase = getSupabase();
+
+  // Best-effort structured-data fetch. If it fails we still render the
+  // client component so SSR never breaks because of SEO concerns.
+  let productLd: ReturnType<typeof productJsonLd> | null = null;
+  let breadcrumb: ReturnType<typeof breadcrumbJsonLd> | null = null;
+
+  if (supabase) {
+    const { data: product } = await supabase
+      .from('products')
+      .select('name, slug, description, short_description, price, brand, quantity, sku, product_images(url, position), category:categories(name, slug)')
+      .eq('slug', slug)
+      .eq('status', 'active')
+      .single();
+
+    if (product) {
+      const images = [...(product.product_images || [])].sort(
+        (a: { position?: number }, b: { position?: number }) => (a.position ?? 0) - (b.position ?? 0),
+      );
+      const imageUrl = images[0]?.url
+        ? images[0].url.startsWith('http')
+          ? images[0].url
+          : `${SITE_URL}${images[0].url}`
+        : `${SITE_URL}${SEO_ASSETS.ogImage}`;
+
+      productLd = productJsonLd({
+        name: product.name,
+        description:
+          product.short_description?.trim() ||
+          product.description?.replace(/<[^>]+>/g, '').slice(0, 500) ||
+          `Shop ${product.name} at ${BRAND_NAME}.`,
+        image: imageUrl,
+        slug: product.slug,
+        price: Number(product.price) || 0,
+        currency: 'GHS',
+        sku: product.sku || product.slug,
+        inStock: (product.quantity ?? 0) > 0,
+        brand: product.brand || BRAND_NAME,
+      });
+
+      const category = Array.isArray(product.category) ? product.category[0] : product.category;
+      const breadcrumbItems = [
+        { name: 'Home', path: '/' },
+        { name: 'Shop', path: '/shop' },
+      ];
+      if (category?.name && category?.slug) {
+        breadcrumbItems.push({
+          name: category.name,
+          path: `/shop?category=${category.slug}`,
+        });
+      }
+      breadcrumbItems.push({ name: product.name, path: `/product/${product.slug}` });
+      breadcrumb = breadcrumbJsonLd(breadcrumbItems);
+    }
+  }
+
+  return (
+    <>
+      {productLd && (
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(productLd) }}
+        />
+      )}
+      {breadcrumb && (
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
+        />
+      )}
+      <ProductDetailClient slug={slug} />
+    </>
+  );
 }

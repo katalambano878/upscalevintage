@@ -13,7 +13,7 @@ export const BRAND_INTRO =
 
 export const BRAND_INTRO_SECONDARY =
   'From fashion and bags to home appliances, accessories, and special imports, we track trending lifestyle so you stay ahead of the curve.';
-export const SITE_URL_DEFAULT = 'https://upscalevintage.com';
+export const SITE_URL_DEFAULT = 'https://upscalevintage.shop';
 export const LOGO_PATH = '/logo.png';
 export const OG_IMAGE_PATH = '/og-image.png';
 

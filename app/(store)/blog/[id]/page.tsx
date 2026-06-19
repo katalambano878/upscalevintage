@@ -1,16 +1,107 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { sanitizeHtml } from '@/lib/sanitize';
+import { BRAND_NAME, APP_TITLE } from '@/lib/brand';
+import { SITE_URL, SEO_ASSETS, articleJsonLd, breadcrumbJsonLd } from '@/lib/seo';
+
+const BLOG_POST_META: Record<string, { title: string; excerpt: string; image: string; category: string; date: string; isoDate: string; author: string }> = {
+  '1': {
+    title: 'The Ultimate Guide to Online Shopping in Ghana',
+    excerpt:
+      'Everything you need to know about safe, convenient online shopping in Ghana. From payment methods to delivery options, we cover it all.',
+    image:
+      'https://readdy.ai/api/search-image?query=Modern%20African%20woman%20shopping%20online%20on%20laptop%20in%20bright%20contemporary%20home%20office%20coffee%20cup%20plants%20natural%20light%20relaxed%20lifestyle%20photography%20minimal%20clean%20background&width=1200&height=600&seq=blogpost1&orientation=landscape',
+    category: 'Shopping Tips',
+    date: 'December 15, 2024',
+    isoDate: '2024-12-15',
+    author: 'Ama Osei',
+  },
+  '2': {
+    title: '10 Must-Have Products for Your Home This Season',
+    excerpt:
+      'Discover the trending products that will elevate your living space and make your home more comfortable and stylish.',
+    image:
+      'https://readdy.ai/api/search-image?query=Beautiful%20modern%20African%20home%20interior%20with%20stylish%20furniture%20decor%20items%20plants%20bright%20natural%20lighting%20contemporary%20design%20magazine%20quality%20photography&width=1200&height=600&seq=blogpost2&orientation=landscape',
+    category: 'Home & Living',
+    date: 'December 12, 2024',
+    isoDate: '2024-12-12',
+    author: 'Yaw Darko',
+  },
+  '3': {
+    title: "How to Choose Quality Products: A Buyer's Guide",
+    excerpt:
+      'Learn the key indicators of quality products and how to make informed purchasing decisions that offer the best value for your money.',
+    image:
+      'https://readdy.ai/api/search-image?query=Person%20examining%20product%20quality%20checking%20labels%20and%20details%20in%20bright%20retail%20setting%20closeup%20hands%20inspecting%20merchandise%20professional%20photography%20clean%20background&width=1200&height=600&seq=blogpost3&orientation=landscape',
+    category: 'Buying Guide',
+    date: 'December 10, 2024',
+    isoDate: '2024-12-10',
+    author: 'Kwame Mensah',
+  },
+};
 
 export async function generateStaticParams() {
-  return [
-    { id: '1' },
-    { id: '2' },
-    { id: '3' },
-  ];
+  return Object.keys(BLOG_POST_META).map((id) => ({ id }));
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const post = BLOG_POST_META[id];
+  if (!post) {
+    return {
+      title: `Blog | ${APP_TITLE}`,
+      description: `Style and lifestyle articles from ${BRAND_NAME}.`,
+    };
+  }
+
+  const canonical = `${SITE_URL}/blog/${id}`;
+  const title = `${post.title} | ${BRAND_NAME}`;
+
+  return {
+    title,
+    description: post.excerpt,
+    keywords: [post.category, 'Upscale Vintage blog', 'Ghana shopping tips', BRAND_NAME],
+    authors: [{ name: post.author }],
+    alternates: { canonical },
+    openGraph: {
+      type: 'article',
+      url: canonical,
+      siteName: APP_TITLE,
+      title,
+      description: post.excerpt,
+      locale: 'en_GH',
+      publishedTime: new Date(post.isoDate).toISOString(),
+      authors: [post.author],
+      tags: [post.category],
+      images: [{ url: post.image, width: 1200, height: 630, alt: post.title }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description: post.excerpt,
+      images: [post.image],
+    },
+  };
 }
 
 export default async function BlogPostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  const meta = BLOG_POST_META[id] || BLOG_POST_META['1'];
+  const articleLd = articleJsonLd({
+    title: meta.title,
+    description: meta.excerpt,
+    image: meta.image,
+    path: `/blog/${id}`,
+    author: meta.author,
+    datePublished: new Date(meta.isoDate).toISOString(),
+    category: meta.category,
+  });
+  const breadcrumb = breadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'Blog', path: '/blog' },
+    { name: meta.title, path: `/blog/${id}` },
+  ]);
 
   const posts: any = {
     '1': {
@@ -282,6 +373,16 @@ export default async function BlogPostPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="min-h-screen bg-white">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLd) }}
+      />
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
+      />
       <div className="relative h-96 bg-gray-900">
         <img
           src={post.image}
