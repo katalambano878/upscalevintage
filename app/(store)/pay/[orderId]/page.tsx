@@ -28,7 +28,7 @@ export default function PaymentPage() {
         const data = await apiData<any>(
           `/api/orders/summary?order_number=${encodeURIComponent(orderId)}`
         ).catch(async () => {
-          return api<any>(`/api/orders/${encodeURIComponent(orderId)}`);
+          return apiData<any>(`/api/orders/${encodeURIComponent(orderId)}`);
         });
 
         if (!data) {

@@ -32,7 +32,7 @@ function OrderTrackingContent() {
     setError('');
 
     try {
-      const data = await api<Record<string, unknown>>('/api/orders/track', {
+      const data = await apiData<Record<string, unknown>>('/api/orders/track', {
         method: 'POST',
         json: { email: emailToVerify, order_number: orderNum },
       });

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { verifyAuth, isStaffRole } from '@/lib/auth';
-import { getOrderById, getUserIdFromRequest } from '@/lib/data/orders';
+import { verifyAuth, isStaffRole, getUserIdFromRequest } from '@/lib/auth';
+import { getOrderById } from '@/lib/data/orders';
 
 type Ctx = { params: Promise<{ id: string }> };
 

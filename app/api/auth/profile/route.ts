@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
-import { hashPassword } from '@/lib/auth/password';
+import { hashPassword } from '@/lib/password';
 import { query } from '@/lib/db';
 
 export async function PATCH(request: Request) {

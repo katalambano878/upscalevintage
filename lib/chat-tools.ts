@@ -405,20 +405,23 @@ export async function getCustomerOrders(_supabase: unknown, userId: string, limi
         [userId, limit]
     );
 
-    return data.map((o) => ({
-        id: o.id,
-        order_number: o.order_number,
-        status: o.status,
-        payment_status: o.payment_status || 'pending',
-        total: Number(o.total) || 0,
-        created_at: o.created_at,
-        tracking_number: undefined,
-        items: (o.order_items || []).map((i: any) => ({
-            name: i.product_name || 'Item',
-            quantity: i.quantity,
-            price: Number(i.unit_price) || 0,
-        })),
-    }));
+    return data.map((o) => {
+        const items = Array.isArray(o.order_items) ? o.order_items : [];
+        return {
+            id: String(o.id ?? ''),
+            order_number: String(o.order_number ?? ''),
+            status: String(o.status ?? ''),
+            payment_status: String(o.payment_status || 'pending'),
+            total: Number(o.total) || 0,
+            created_at: String(o.created_at ?? ''),
+            tracking_number: undefined,
+            items: items.map((i: { product_name?: string; quantity?: number; unit_price?: number }) => ({
+                name: i.product_name || 'Item',
+                quantity: Number(i.quantity) || 0,
+                price: Number(i.unit_price) || 0,
+            })),
+        };
+    });
 }
 
 // ─── 5. Check Coupon ────────────────────────────────────────────────────────
@@ -437,8 +440,8 @@ export async function checkCoupon(_supabase: unknown, code: string, cartTotal?: 
 
     const isActive = data.is_active !== false;
     const now = new Date();
-    const start = data.start_date ? new Date(data.start_date) : null;
-    const end = data.end_date ? new Date(data.end_date) : null;
+    const start = data.start_date ? new Date(String(data.start_date)) : null;
+    const end = data.end_date ? new Date(String(data.end_date)) : null;
     const usageLimit = data.usage_limit;
     const usageCount = Number(data.usage_count ?? 0);
 
@@ -478,7 +481,7 @@ export async function checkCoupon(_supabase: unknown, code: string, cartTotal?: 
         value,
         minimum_purchase: minPurchase || undefined,
         maximum_discount: maxDisc,
-        expires: data.end_date || undefined,
+        expires: data.end_date ? String(data.end_date) : undefined,
     };
 }
 

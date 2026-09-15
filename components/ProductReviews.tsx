@@ -56,15 +56,15 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
 
       if (data) {
         const formattedReviews = (data as Record<string, unknown>[]).map((r) => ({
-          id: r.id,
+          id: String(r.id ?? ''),
           author: 'Verified Customer',
-          rating: r.rating,
-          date: r.created_at,
-          verified: r.verified_purchase,
-          title: r.title,
-          content: r.content,
-          helpful: r.helpful_votes || 0,
-          user_id: r.user_id
+          rating: Number(r.rating) || 0,
+          date: String(r.created_at ?? ''),
+          verified: Boolean(r.verified_purchase),
+          title: String(r.title ?? ''),
+          content: String(r.content ?? ''),
+          helpful: Number(r.helpful_votes) || 0,
+          user_id: String(r.user_id ?? ''),
         }));
         setReviews(formattedReviews);
       }

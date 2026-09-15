@@ -42,18 +42,18 @@ export async function POST(request: Request) {
       .setExpirationTime('1h')
       .sign(getSecret());
 
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://mamator.com').replace(/\/$/, '');
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://upscalevintage.shop').replace(/\/$/, '');
     const resetUrl = `${appUrl}/auth/reset-password?token=${encodeURIComponent(token)}`;
 
     const apiKey = process.env.RESEND_API_KEY;
-    const from = process.env.EMAIL_FROM || 'info@mamator.com';
+    const from = process.env.EMAIL_FROM || 'Upscale Vintage <hello@upscalevintage.com>';
 
     if (apiKey) {
       const resend = new Resend(apiKey);
       await resend.emails.send({
         from,
         to: user.email,
-        subject: 'Reset your Mamator password',
+        subject: 'Reset your Upscale Vintage password',
         html: `<p>Reset your password by opening this link (valid 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p>`,
       });
     } else {

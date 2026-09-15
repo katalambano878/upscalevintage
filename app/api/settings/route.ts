@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     }
 
     const settings: Record<string, unknown> = {};
-    for (const row of rows) {
+    for (const row of rows as { key: string; value: unknown }[]) {
       if (!isAdmin && !PUBLIC_KEYS.has(row.key)) continue;
       settings[row.key] = row.value;
     }

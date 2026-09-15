@@ -444,6 +444,11 @@ ${emailButton('Start Shopping', `${BRAND.url}/shop`)}
     }
 }
 
+export async function sendNewsletterWelcome(email: string) {
+    const localPart = email.split('@')[0] || 'there';
+    await sendWelcomeMessage({ email, firstName: localPart });
+}
+
 export async function sendPaymentLink(order: any) {
     const { id, email, phone: orderPhone, shipping_address, total, order_number, metadata } = order;
 

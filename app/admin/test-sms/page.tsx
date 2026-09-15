@@ -12,7 +12,7 @@ export default function TestSmsPage() {
     const handleSend = () => {
         setResult(null);
         startTransition(async () => {
-            const res = await testSmsAction(phone, message);
+            const res = await testSmsAction(phone, message, '');
             setResult(res);
         });
     };

@@ -66,7 +66,7 @@ export default function ImportForm() {
     try {
       const res = await fetch('/api/admin/products/import', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        credentials: 'include',
         body: formData,
       });
 

@@ -117,7 +117,7 @@ export async function DELETE(request: Request, context: Ctx) {
   const { id } = await context.params;
   try {
     const result = await query(`DELETE FROM blog_posts WHERE id = $1::uuid RETURNING id`, [id]);
-    if (!result.rowCount) {
+    if (!result.length) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     return NextResponse.json({ success: true });

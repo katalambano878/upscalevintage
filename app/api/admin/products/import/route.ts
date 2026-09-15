@@ -223,7 +223,7 @@ export async function POST(request: Request) {
           `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address)
            VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6)`,
           [
-            auth.user.id,
+            auth.user!.id,
             'product_import',
             'import',
             null,

@@ -13,9 +13,21 @@ interface OrderSummaryProps {
   shipping: number;
   tax: number;
   total: number;
+  dueNow?: number;
+  balanceDue?: number;
+  paymentOption?: 'full' | 'half';
 }
 
-export default function OrderSummary({ items, subtotal, shipping, tax, total }: OrderSummaryProps) {
+export default function OrderSummary({
+  items,
+  subtotal,
+  shipping,
+  tax,
+  total,
+  dueNow,
+  balanceDue,
+  paymentOption,
+}: OrderSummaryProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm p-6 sticky top-4">
       <h2 className="text-xl font-bold text-gray-900 mb-6">Order Summary</h2>
@@ -61,6 +73,20 @@ export default function OrderSummary({ items, subtotal, shipping, tax, total }: 
           <span className="text-lg font-bold text-gray-900">Total</span>
           <span className="text-2xl font-bold text-brand-espresso">GH₵ {total.toFixed(2)}</span>
         </div>
+        {paymentOption === 'half' && dueNow != null ? (
+          <div className="mt-3 space-y-1 text-sm text-gray-700">
+            <div className="flex justify-between">
+              <span>Due now</span>
+              <span className="font-semibold">GH₵ {dueNow.toFixed(2)}</span>
+            </div>
+            {balanceDue ? (
+              <div className="flex justify-between">
+                <span>Balance due</span>
+                <span className="font-semibold">GH₵ {balanceDue.toFixed(2)}</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-6 p-4 bg-brand-nude/30 border border-brand-nude/70 rounded-lg">

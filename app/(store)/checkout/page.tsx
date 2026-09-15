@@ -174,7 +174,7 @@ export default function CheckoutPage() {
         image: item.image,
       }));
 
-      const order = await api<Record<string, unknown>>('/api/orders', {
+      const order = await apiData<Record<string, unknown>>('/api/orders', {
         method: 'POST',
         json: {
           orderNumber,

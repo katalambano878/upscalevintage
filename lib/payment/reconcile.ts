@@ -104,7 +104,7 @@ export async function listReconcileCandidates(options?: {
     [olderThan, limit]
   );
 
-  return result.rows.map((row) => {
+  return result.map((row) => {
     const meta = row.metadata || {};
     const amountPaid = getAmountPaid(meta);
     const expectedCharge = getChargeAmountForOrder(row);
@@ -413,7 +413,7 @@ export async function listReconcileLogs(limit = 30) {
        LIMIT $1`,
       [limit]
     );
-    return result.rows;
+    return result;
   } catch (err) {
     console.error('[Reconcile] list logs failed:', err);
     return [];

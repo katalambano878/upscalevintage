@@ -12,10 +12,10 @@ function ContactForm() {
   usePageTitle('Contact Us');
   const searchParams = useSearchParams();
   const { getSetting } = useCMS();
-  const contactPhone = getSetting('contact_phone') || '0249628324';
-  const contactEmail = getSetting('contact_email') || 'info@mamator.com';
-  const contactAddress = getSetting('contact_address') || 'Accra, Kasoa, Koforidua';
-  const contactWhatsapp = getSetting('contact_whatsapp') || getSetting('contact_phone') || '0249628324';
+  const contactPhone = getSetting('contact_phone') || '0545035799';
+  const contactEmail = getSetting('contact_email') || 'hello@upscalevintage.com';
+  const contactAddress = getSetting('contact_address') || 'Hatso Agbogba Salasi Junction, Accra, Ghana';
+  const contactWhatsapp = getSetting('contact_whatsapp') || getSetting('contact_phone') || '0545035799';
   const [pageContent, setPageContent] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: '',

@@ -17,6 +17,8 @@ const DEFAULT_TIMEOUT_MS = 20_000;
 export interface RequestOptions {
     method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
     body?: unknown;
+    /** Alias used by migrated store/admin pages. */
+    json?: unknown;
     signal?: AbortSignal;
     timeoutMs?: number;
     /** Sends FormData untouched, for uploads. */
@@ -24,7 +26,8 @@ export interface RequestOptions {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
-    const { method = 'GET', body, formData, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+    const { method = 'GET', body, json, formData, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+    const payload = body ?? json;
 
     // Without this a stalled request leaves a spinner running forever, which is
     // indistinguishable from the page being frozen.
@@ -38,8 +41,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     try {
         const response = await fetch(path, {
             method,
-            headers: formData ? undefined : body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-            body: formData ?? (body !== undefined ? JSON.stringify(body) : undefined),
+            headers: formData ? undefined : payload !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+            body: formData ?? (payload !== undefined ? JSON.stringify(payload) : undefined),
             credentials: 'same-origin',
             signal: controller.signal,
         });
@@ -59,10 +62,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
             };
         }
 
-        const payload = (await response.json()) as ApiResult<T> | T;
+        const parsed = (await response.json()) as ApiResult<T> | T;
 
         if (!response.ok) {
-            const failure = payload as ApiResult<T>;
+            const failure = parsed as ApiResult<T>;
             return {
                 data: null,
                 error: failure.error ?? { message: 'Request failed.', code: String(response.status) },
@@ -70,16 +73,16 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
         }
 
         if (
-            payload &&
-            typeof payload === 'object' &&
-            'data' in payload &&
-            'error' in payload &&
-            (payload as ApiResult<T>).error === null
+            parsed &&
+            typeof parsed === 'object' &&
+            'data' in parsed &&
+            'error' in parsed &&
+            (parsed as ApiResult<T>).error === null
         ) {
-            return { data: (payload as ApiResult<T>).data ?? null, error: null };
+            return { data: (parsed as ApiResult<T>).data ?? null, error: null };
         }
 
-        return { data: payload as T, error: null };
+        return { data: parsed as T, error: null };
     } catch (err) {
         if ((err as Error).name === 'AbortError') {
             return {
@@ -118,17 +121,18 @@ export async function apiData<T>(
     path: string,
     options: RequestOptions & { method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE' } = {}
 ): Promise<T> {
-    const { method = 'GET', body, ...rest } = options;
+    const { method = 'GET', body, json, ...rest } = options;
+    const payload = body ?? json;
     const result =
         method === 'GET'
             ? await apiGet<T>(path, rest)
             : method === 'POST'
-              ? await apiPost<T>(path, body, rest)
+              ? await apiPost<T>(path, payload, rest)
               : method === 'PATCH'
-                ? await apiPatch<T>(path, body, rest)
+                ? await apiPatch<T>(path, payload, rest)
                 : method === 'DELETE'
                   ? await apiDelete<T>(path, rest)
-                  : await apiRequest<T>(path, { ...rest, method, body });
+                  : await apiRequest<T>(path, { ...rest, method, body: payload });
 
     if (result.error) {
         throw new Error(result.error.message);

@@ -9,8 +9,8 @@ import { Pool, types, type PoolClient } from 'pg';
  * database credentials reaching the browser.
  */
 
-types.setTypeParser(types.builtins.NUMERIC, (value) => (value === null ? null : parseFloat(value)));
-types.setTypeParser(types.builtins.INT8, (value) => (value === null ? null : parseInt(value, 10)));
+types.setTypeParser(types.builtins.NUMERIC, (value: string | null) => (value === null ? null : parseFloat(value)));
+types.setTypeParser(types.builtins.INT8, (value: string | null) => (value === null ? null : parseInt(value, 10)));
 
 function getConnectionString(): string {
     const connectionString = process.env.DATABASE_URL;
@@ -36,7 +36,7 @@ function createPool(): Pool {
         query_timeout: 15_000,
     });
 
-    pool.on('error', (err) => {
+    pool.on('error', (err: Error) => {
         console.error('[db] idle client error', { message: err.message });
     });
 

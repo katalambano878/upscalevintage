@@ -145,7 +145,7 @@ export async function DELETE(request: Request, context: Ctx) {
     await query(`DELETE FROM product_images WHERE product_id = $1::uuid`, [id]);
     await query(`DELETE FROM product_variants WHERE product_id = $1::uuid`, [id]);
     const result = await query(`DELETE FROM products WHERE id = $1::uuid RETURNING id`, [id]);
-    if (!result.rowCount) {
+    if (!result.length) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     return NextResponse.json({ success: true });
