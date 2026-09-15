@@ -65,10 +65,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
         const parsed = (await response.json()) as ApiResult<T> | T;
 
         if (!response.ok) {
-            const failure = parsed as ApiResult<T>;
             return {
                 data: null,
-                error: failure.error ?? { message: 'Request failed.', code: String(response.status) },
+                error: normalizeError(parsed, response.status),
             };
         }
 
@@ -97,6 +96,28 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     } finally {
         clearTimeout(timer);
     }
+}
+
+function normalizeError(parsed: unknown, status: number): { message: string; code: string } {
+    if (typeof parsed === 'string' && parsed.trim()) {
+        return { message: parsed, code: String(status) };
+    }
+    if (parsed && typeof parsed === 'object') {
+        const body = parsed as { error?: unknown; message?: unknown };
+        if (typeof body.error === 'string' && body.error.trim()) {
+            return { message: body.error, code: String(status) };
+        }
+        if (body.error && typeof body.error === 'object') {
+            const nested = body.error as { message?: unknown; code?: unknown };
+            if (typeof nested.message === 'string' && nested.message.trim()) {
+                return { message: nested.message, code: String(nested.code || status) };
+            }
+        }
+        if (typeof body.message === 'string' && body.message.trim()) {
+            return { message: body.message, code: String(status) };
+        }
+    }
+    return { message: 'Request failed.', code: String(status) };
 }
 
 export function apiGet<T>(path: string, options?: Omit<RequestOptions, 'method' | 'body'>) {

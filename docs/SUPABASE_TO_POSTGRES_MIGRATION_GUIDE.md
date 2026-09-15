@@ -49,6 +49,7 @@ Migrations in `db/migrations/`:
 
 1. `0001_plain_postgres.sql` — catalog, orders, users, sessions (no `auth.*`)
 2. `0002_upscale_rpcs_chat_payments.sql` — chat, contact, payment inbox, RPCs
+3. `0003_admin_payments_catalog.sql` — `partially_paid`, variant `sale_price`, default categories, payment RPCs
 
 Applied on `store_upscalevintage` (2026-09-15). 42 public tables.
 
@@ -67,7 +68,8 @@ This repo’s Supabase project ref was a placeholder (`YOUR_PROJECT_ID`). There 
 Active gateway in code: **Moolre**. Hubtel and Paystack are not wired in this store.
 
 Callback: `POST /api/payment/moolre/callback`  
-Idempotent apply: `record_order_payment(order_ref, moolre_ref, amount)` → inbox `payment_events` + `mark_order_paid`.
+Secret accepted from JSON body, query string, or `x-moolre-secret` header.  
+Idempotent apply: `record_order_payment(order_ref, moolre_ref, amount)` → inbox `payment_events` + `mark_order_paid` (sets `partially_paid` when the charged amount is below the order total).
 
 SMS: `MOOLRE_SMS_API_KEY` (optional). Email: `RESEND_API_KEY` (optional).
 

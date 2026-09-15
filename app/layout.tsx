@@ -50,10 +50,6 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="180x180" href={SEO_ASSETS.appleTouchIcon} />
         <link rel="manifest" href="/favicon/site.webmanifest" />
 
-        <link
-          href="https://cdn.jsdelivr.net/npm/remixicon@4.1.0/fonts/remixicon.css"
-          rel="stylesheet"
-        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}

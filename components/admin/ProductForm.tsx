@@ -30,14 +30,18 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const [moq, setMoq] = useState(initialData?.moq || '1');
     const [lowStockThreshold, setLowStockThreshold] = useState(initialData?.metadata?.low_stock_threshold || '5');
     const [description, setDescription] = useState(initialData?.description || '');
-    const [status, setStatus] = useState(initialData?.status || 'Active');
+    const [status, setStatus] = useState(
+        ['active', 'draft', 'archived'].includes(String(initialData?.status || '').toLowerCase())
+            ? String(initialData.status).toLowerCase()
+            : 'active'
+    );
     const [featured, setFeatured] = useState(initialData?.featured || false);
     const [preorderShipping, setPreorderShipping] = useState(initialData?.metadata?.preorder_shipping || '');
     const [activeTab, setActiveTab] = useState('general');
 
     // Auto-generate SKU function
     const generateSku = () => {
-        const prefix = 'MH'; // Mamator
+        const prefix = 'UV';
         const timestamp = Date.now().toString(36).toUpperCase().slice(-4);
         const random = Math.random().toString(36).substring(2, 6).toUpperCase();
         return `${prefix}-${timestamp}-${random}`;
@@ -231,16 +235,21 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     // Fetch categories on mount
     useEffect(() => {
         async function fetchCategories() {
-            const data = await apiData<{ id: string; name: string }[]>('/api/catalog/categories');
-            if (data) {
-                setCategories(data);
-                if (data.length > 0 && !categoryId) {
-                    setCategoryId(data[0].id);
+            try {
+                const data = await apiData<{ id: string; name: string }[]>('/api/catalog/categories');
+                if (Array.isArray(data)) {
+                    setCategories(data);
+                    if (data.length > 0 && !categoryId) {
+                        setCategoryId(data[0].id);
+                    }
                 }
+            } catch (err) {
+                console.error('Failed to load categories', err);
+                setCategories([]);
             }
         }
         fetchCategories();
-    }, [categoryId]);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Auto-generate slug + SEO when empty (new products / blank SEO fields)
     useEffect(() => {
@@ -250,7 +259,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             name: productName,
             description,
             categoryName,
-            siteName: process.env.NEXT_PUBLIC_SITE_NAME || 'Mamator',
+            siteName: process.env.NEXT_PUBLIC_SITE_NAME || 'Upscale Vintage',
         });
         if (!isEditMode && !urlSlug) setUrlSlug(seo.slug || slugifyProduct(productName));
         if (!seoTitle) setSeoTitle(seo.seo_title);
@@ -298,6 +307,12 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const handleSubmit = async () => {
         try {
             setLoading(true);
+            if (!productName.trim()) {
+                throw new Error('Enter a product name on the General tab.');
+            }
+            if (!price || Number(price) < 0) {
+                throw new Error('Enter a valid regular price.');
+            }
 
             // If product has variants, auto-sync main stock = sum of variant stocks
             const hasVariants = variants.length > 0;
@@ -306,9 +321,16 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 : parseInt(stock) || 0;
 
             const salePriceNum = salePrice.trim() ? parseFloat(salePrice) : NaN;
+            const nextSlug = (urlSlug || productName)
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/(^-|-$)+/g, '');
+            if (!nextSlug) {
+                throw new Error('Add a product name so a URL slug can be generated.');
+            }
             const productData = {
-                name: productName,
-                slug: urlSlug || productName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+                name: productName.trim(),
+                slug: nextSlug,
                 description,
                 category_id: categoryId || null,
                 price: parseFloat(price) || 0,
@@ -486,7 +508,9 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         onChange={(e) => setCategoryId(e.target.value)}
                                         className="w-full px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary cursor-pointer"
                                     >
-                                        {categories.length === 0 && <option value="">Loading categories...</option>}
+                                        {categories.length === 0 && (
+                                            <option value="">No categories yet — add one under Categories</option>
+                                        )}
                                         {categories.length > 0 && <option value="">Select a category</option>}
                                         {categories.map(cat => (
                                             <option key={cat.id} value={cat.id}>{cat.name}</option>
@@ -503,9 +527,9 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         onChange={(e) => setStatus(e.target.value)}
                                         className="w-full px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary cursor-pointer"
                                     >
-                                        <option>Active</option>
-                                        <option>Draft</option>
-                                        <option>Archived</option>
+                                        <option value="active">Active</option>
+                                        <option value="draft">Draft</option>
+                                        <option value="archived">Archived</option>
                                     </select>
                                 </div>
                             </div>

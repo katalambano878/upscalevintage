@@ -95,39 +95,57 @@ export async function POST(request: Request) {
       tags,
     } = body;
 
-    if (!name || !slug || price === undefined) {
-      return NextResponse.json({ error: 'name, slug, and price are required' }, { status: 400 });
+    const productName = String(name || '').trim();
+    const productSlug = String(slug || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
+    const numericPrice = Number(price);
+    const allowedStatus = new Set(['active', 'draft', 'archived']);
+    const productStatus = allowedStatus.has(String(status).toLowerCase())
+      ? String(status).toLowerCase()
+      : 'draft';
+    const category =
+      typeof category_id === 'string' && /^[0-9a-f-]{36}$/i.test(category_id) ? category_id : null;
+
+    if (!productName || !productSlug || !Number.isFinite(numericPrice)) {
+      return NextResponse.json(
+        { error: 'Name, URL slug, and a valid price are required.' },
+        { status: 400 }
+      );
     }
 
     const created = await queryOne(
       `INSERT INTO products (
          name, slug, price, category_id, status, description, short_description,
          quantity, sale_price, compare_at_price, featured, metadata, sku,
-         seo_title, seo_description, tags
+         seo_title, seo_description, tags, moq
        )
        VALUES (
          $1, $2, $3, $4::uuid, $5::product_status, $6, $7,
          $8, $9, $10, $11, $12::jsonb, $13,
-         $14, $15, $16::text[]
+         $14, $15, $16::text[], $17
        )
        RETURNING *`,
       [
-        name,
-        slug,
-        price,
-        category_id || null,
-        status,
+        productName,
+        productSlug,
+        numericPrice,
+        category,
+        productStatus,
         description || null,
         short_description || null,
-        quantity,
-        sale_price ?? null,
-        compare_at_price ?? null,
-        featured,
-        JSON.stringify(metadata),
+        Number(quantity) || 0,
+        sale_price === '' || sale_price == null ? null : Number(sale_price),
+        compare_at_price === '' || compare_at_price == null ? null : Number(compare_at_price),
+        Boolean(featured),
+        JSON.stringify(metadata || {}),
         sku || null,
         seo_title || null,
         seo_description || null,
         Array.isArray(tags) ? tags : [],
+        Number(body.moq) > 0 ? Number(body.moq) : 1,
       ]
     );
 
@@ -141,7 +159,15 @@ export async function POST(request: Request) {
 
     return NextResponse.json(created, { status: 201 });
   } catch (err: unknown) {
+    const code = (err as { code?: string }).code;
+    if (code === '23505') {
+      return NextResponse.json({ error: 'A product with that slug or SKU already exists.' }, { status: 409 });
+    }
+    if (code === '22P02' || code === '23514') {
+      return NextResponse.json({ error: 'One of the product values is not valid.' }, { status: 400 });
+    }
     const message = err instanceof Error ? err.message : 'Create failed';
+    console.error('[catalog/products POST]', message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -70,7 +70,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: 'Invalid Request Body' }, { status: 400 });
     }
 
-    if (!validateCallbackSecret(body)) {
+    if (!validateCallbackSecret(body, req)) {
       return NextResponse.json({ success: false, message: 'Invalid callback signature' }, { status: 403 });
     }
 
@@ -120,11 +120,12 @@ export async function POST(req: Request) {
       const prevStatus = existingOrder.payment_status;
       const wasConfirmed = existingOrder.metadata?.confirmation_sent_at;
 
-      // Deduplicate already-processed gateway references
       if (moolreReference) {
         const prior = await queryOne<{ id: string }>(
-          `SELECT id FROM payment_callback_events
-           WHERE gateway = 'moolre' AND gateway_reference = $1 AND processing_status = 'processed'
+          `SELECT id FROM payment_events
+           WHERE provider = 'moolre'
+             AND processing_state = 'applied'
+             AND (provider_ref = $1 OR event_key = $1)
            LIMIT 1`,
           [moolreReference]
         );
@@ -136,24 +137,6 @@ export async function POST(req: Request) {
       const orderJson = await recordPayment(merchantOrderRef, moolreReference, chargedAmount);
       if (!orderJson?.id) {
         return NextResponse.json({ success: false, message: 'Database update failed' }, { status: 500 });
-      }
-
-      try {
-        await query(
-          `INSERT INTO payment_callback_events
-             (gateway, order_number, external_ref, gateway_reference, event_type, processing_status, amount, currency, details, processed_at)
-           VALUES
-             ('moolre', $1, $2, $3, 'callback', 'processed', $4, 'GHS', $5::jsonb, now())`,
-          [
-            merchantOrderRef,
-            externalRef || null,
-            moolreReference || null,
-            chargedAmount,
-            JSON.stringify({ payment_status: orderJson.payment_status }),
-          ]
-        );
-      } catch (eventErr: unknown) {
-        console.error('[Callback] event log failed:', eventErr);
       }
 
       if (orderJson.payment_status === 'paid' && orderJson.email && prevStatus !== 'paid') {

@@ -80,14 +80,20 @@ export async function PATCH(request: Request, context: Ctx) {
   for (const key of allowed) {
     if (key in fields) {
       if (key === 'status') {
+        const nextStatus = String(fields[key] || '').toLowerCase();
         sets.push(`${key} = $${i}::product_status`);
-        params.push(fields[key]);
+        params.push(['active', 'draft', 'archived'].includes(nextStatus) ? nextStatus : 'draft');
       } else if (key === 'metadata') {
         sets.push(`${key} = $${i}::jsonb`);
         params.push(JSON.stringify(fields[key]));
       } else if (key === 'category_id') {
+        const nextCategory = fields[key];
         sets.push(`${key} = $${i}::uuid`);
-        params.push(fields[key] || null);
+        params.push(
+          typeof nextCategory === 'string' && /^[0-9a-f-]{36}$/i.test(nextCategory)
+            ? nextCategory
+            : null
+        );
       } else if (key === 'tags') {
         sets.push(`${key} = $${i}::text[]`);
         params.push(Array.isArray(fields[key]) ? fields[key] : []);

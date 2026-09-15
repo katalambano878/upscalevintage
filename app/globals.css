@@ -22,6 +22,15 @@
   textarea {
     @apply font-sans;
   }
+
+  i[class^="ri-"],
+  i[class*=" ri-"] {
+    font-family: remixicon, sans-serif !important;
+    font-style: normal;
+    font-weight: normal;
+    line-height: 1;
+    speak: never;
+  }
 }
 
 /* ========================================

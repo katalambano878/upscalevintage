@@ -1,6 +1,17 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./{app,components,libs,pages,hooks}/**/*.{html,js,ts,jsx,tsx}"],
+  content: ["./{app,components,lib,libs,pages,hooks}/**/*.{html,js,ts,jsx,tsx}"],
+  safelist: [
+    'bg-store-navy',
+    'bg-store-navy-light',
+    'bg-store-surface',
+    'text-store-navy',
+    'text-store-ink',
+    'border-store-navy',
+    'hover:bg-store-navy',
+    'hover:bg-store-navy-light',
+    'hover:bg-store-surface',
+  ],
   theme: {
     extend: {
       fontFamily: {
@@ -20,6 +31,15 @@ module.exports = {
           light: '#EDE3D7',
           dark: '#4A403B',
           accent: '#C8A46A',
+        },
+        store: {
+          navy: '#8A6A58',
+          'navy-light': '#A38472',
+          primary: '#8A6A58',
+          'primary-dark': '#6F5344',
+          ink: '#4A403B',
+          muted: '#A6A089',
+          surface: '#EDE3D7',
         },
       },
       letterSpacing: {

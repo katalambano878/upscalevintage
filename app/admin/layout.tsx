@@ -140,12 +140,12 @@ export default function AdminLayout({
       badge: ''
     },
     {
-      title: 'Payment Reconcile',
+      title: 'Payments',
       icon: 'ri-refund-2-line',
       path: '/admin/payments/reconcile',
     },
     {
-      title: 'POS System',
+      title: 'POS',
       icon: 'ri-store-3-line',
       path: '/admin/pos'
     },
@@ -155,7 +155,7 @@ export default function AdminLayout({
       path: '/admin/products'
     },
     {
-      title: 'Sale pricing',
+      title: 'Sale Pricing',
       icon: 'ri-price-tag-2-line',
       path: '/admin/sales'
     },
@@ -249,7 +249,7 @@ export default function AdminLayout({
       >
         <div className="h-full px-4 py-6 overflow-y-auto">
           <Link href="/admin" className="flex items-center mb-8 px-2 cursor-pointer">
-            <span className="text-xl font-['Pacifico'] text-store-ink">{process.env.NEXT_PUBLIC_SITE_NAME || 'Mamator'}</span>
+            <span className="text-xl font-display font-semibold text-brand-espresso">{process.env.NEXT_PUBLIC_SITE_NAME || 'Upscale Vintage'}</span>
             <span className="ml-3 text-sm font-semibold text-gray-500">ADMIN</span>
           </Link>
 
@@ -266,9 +266,9 @@ export default function AdminLayout({
                     : 'text-gray-700 hover:bg-gray-50'
                     }`}
                 >
-                  <div className="flex items-center space-x-3">
-                    <i className={`${item.icon} text-xl w-5 h-5 flex items-center justify-center`}></i>
-                    <span>{item.title}</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <i className={`${item.icon} text-xl shrink-0 w-5 h-5 flex items-center justify-center`}></i>
+                    <span className="truncate">{item.title}</span>
                   </div>
                   {item.badge && (
                     <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-full">

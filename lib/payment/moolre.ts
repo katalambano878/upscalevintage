@@ -27,12 +27,31 @@ export function assertCallbackSecretConfigured(): void {
   }
 }
 
-export function validateCallbackSecret(body: Record<string, unknown>): boolean {
+export function validateCallbackSecret(body: Record<string, unknown>, req?: Request): boolean {
   const expected = process.env.MOOLRE_CALLBACK_SECRET;
   if (!expected) {
     return !isProductionEnv();
   }
-  return body.secret === expected;
+
+  const candidates: string[] = [];
+  const bodySecret = body.secret ?? body.callback_secret ?? body.token;
+  if (bodySecret != null && String(bodySecret).trim()) {
+    candidates.push(String(bodySecret));
+  }
+
+  if (req) {
+    const url = new URL(req.url);
+    for (const key of ['secret', 'callback_secret', 'token']) {
+      const value = url.searchParams.get(key);
+      if (value) candidates.push(value);
+    }
+    for (const header of ['x-moolre-secret', 'x-callback-secret', 'x-webhook-secret']) {
+      const value = req.headers.get(header);
+      if (value) candidates.push(value);
+    }
+  }
+
+  return candidates.some((value) => value === expected);
 }
 
 export function parseMerchantOrderRef(rawRef: string): string {
