@@ -209,6 +209,7 @@ CREATE TABLE public.products (
   -- numeric(12,2): the Supabase schema used unconstrained numeric, which let
   -- floating point rounding reach the database on prices and totals.
   price             numeric(12,2) NOT NULL CHECK (price >= 0),
+  sale_price        numeric(12,2) CHECK (sale_price >= 0),
   compare_at_price  numeric(12,2) CHECK (compare_at_price >= 0),
   cost_per_item     numeric(12,2) CHECK (cost_per_item >= 0),
   sku               text UNIQUE,

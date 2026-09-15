@@ -50,6 +50,7 @@ Migrations in `db/migrations/`:
 1. `0001_plain_postgres.sql` — catalog, orders, users, sessions (no `auth.*`)
 2. `0002_upscale_rpcs_chat_payments.sql` — chat, contact, payment inbox, RPCs
 3. `0003_admin_payments_catalog.sql` — `partially_paid`, variant `sale_price`, default categories, payment RPCs
+4. `0004_products_sale_price.sql` — `products.sale_price` for store-wide sales
 
 Applied on `store_upscalevintage` (2026-09-15). 42 public tables.
 
