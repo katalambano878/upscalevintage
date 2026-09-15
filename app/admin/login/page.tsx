@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
 import Logo from '@/components/Logo';
-import { BRAND_NAME, TAGLINE } from '@/lib/brand';
+import { BRAND_NAME } from '@/lib/brand';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -52,10 +52,9 @@ export default function AdminLoginPage() {
             </div>
           </Link>
           <p className="font-display text-brand-mauve text-sm tracking-wide mt-3">{BRAND_NAME}</p>
-          <h1 className="font-display text-3xl font-semibold text-brand-espresso mt-4 mb-2">
+          <h1 className="font-display text-3xl font-semibold text-brand-espresso mt-4">
             Admin Login
           </h1>
-          <p className="text-brand-cocoa/80 text-sm max-w-xs mx-auto">{TAGLINE}</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-luxury p-8 border border-brand-nude">
