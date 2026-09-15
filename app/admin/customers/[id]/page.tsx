@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { asNumber, money } from '@/lib/format-money';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -16,25 +17,13 @@ export default function CustomerDetailsPage() {
 
     const fetchCustomerData = useCallback(async () => {
         try {
-            // 1. Fetch Profile
-            const { data: profile, error: profileError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', customerId)
-                .single();
+            const rows = await apiData<any[]>('/api/admin/customers');
+            const profile = rows.find((r) => r.id === customerId || r.user_id === customerId);
+            if (!profile) throw new Error('Customer not found');
 
-            if (profileError) throw profileError;
-
-            // 2. Fetch Orders
-            const { data: ordersData, error: ordersError } = await supabase
-                .from('orders')
-                .select('*')
-                .eq('user_id', customerId)
-                .order('created_at', { ascending: false });
-
-            if (ordersError && ordersError.code !== 'PGRST116') { // Ignore not found if simply no orders? No, select returns empty array usually
-                // Actually select returns empty array if no match, not error.
-            }
+            const ordersData = (await apiData<any[]>('/api/orders')).filter(
+              (o) => o.user_id === profile.user_id || o.email === profile.email
+            );
 
             setCustomer(profile);
             setOrders(ordersData || []);
@@ -54,7 +43,7 @@ export default function CustomerDetailsPage() {
     if (loading) return <div className="p-8 text-center text-gray-500">Loading customer details...</div>;
     if (!customer) return <div className="p-8 text-center text-red-500">Customer not found</div>;
 
-    const totalSpent = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+    const totalSpent = orders.reduce((sum, order) => sum + asNumber(order.total), 0);
 
     return (
         <div className="max-w-7xl mx-auto">
@@ -64,7 +53,7 @@ export default function CustomerDetailsPage() {
                     <Link href="/admin/customers" className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
                         <i className="ri-arrow-left-line text-xl"></i>
                     </Link>
-                    <div className="w-16 h-16 bg-brand-nude/50 rounded-full flex items-center justify-center text-brand-espresso text-2xl font-bold">
+                    <div className="w-16 h-16 bg-store-surface rounded-full flex items-center justify-center text-store-ink text-2xl font-bold">
                         {customer.full_name?.charAt(0) || customer.email.charAt(0).toUpperCase()}
                     </div>
                     <div>
@@ -77,7 +66,7 @@ export default function CustomerDetailsPage() {
                         <i className="ri-mail-send-line mr-2"></i>
                         Send Email
                     </button>
-                    <button className="px-4 py-2 bg-brand-espresso text-white rounded-lg font-bold hover:bg-brand-espresso cursor-pointer">
+                    <button className="px-4 py-2 bg-store-navy-light text-white rounded-lg font-bold hover:bg-store-navy cursor-pointer">
                         Edit Customer
                     </button>
                 </div>
@@ -87,7 +76,7 @@ export default function CustomerDetailsPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                     <p className="text-sm font-medium text-gray-500 mb-1">Total Spent</p>
-                    <p className="text-2xl font-bold text-gray-900">GH₵{totalSpent.toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-gray-900">GH₵{money(totalSpent)}</p>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                     <p className="text-sm font-medium text-gray-500 mb-1">Total Orders</p>
@@ -127,7 +116,7 @@ export default function CustomerDetailsPage() {
                         <tbody className="divide-y divide-gray-100">
                             {orders.map(order => (
                                 <tr key={order.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 text-sm font-medium text-brand-espresso">
+                                    <td className="px-6 py-4 text-sm font-medium text-store-muted">
                                         <Link href={`/admin/orders/${order.id}`}>#{order.id.slice(0, 8)}</Link>
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-600">
@@ -135,17 +124,17 @@ export default function CustomerDetailsPage() {
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
-                                            ${order.status === 'completed' || order.status === 'delivered' ? 'bg-brand-nude/50 text-brand-cocoa' :
+                                            ${order.status === 'completed' || order.status === 'delivered' ? 'bg-store-surface text-store-ink' :
                                                 order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                                    order.status === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-brand-nude/50 text-brand-cocoa'}`}>
+                                                    order.status === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-store-surface text-store-ink'}`}>
                                             {order.status.replace('_', ' ')}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-sm font-bold text-gray-900">
-                                        GH₵{(order.total || 0).toFixed(2)}
+                                        GH₵{money(order.total)}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Link href={`/admin/orders/${order.id}`} className="text-gray-400 hover:text-brand-espresso">
+                                        <Link href={`/admin/orders/${order.id}`} className="text-gray-400 hover:text-store-muted">
                                             <i className="ri-eye-line text-lg"></i>
                                         </Link>
                                     </td>

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
-import { createClient } from '@supabase/supabase-js';
 import { SITE_URL } from '@/lib/seo';
+import { query } from '@/lib/db';
 
 /**
  * Dynamic sitemap.xml for Upscale Vintage.
@@ -24,9 +24,6 @@ import { SITE_URL } from '@/lib/seo';
 // and we want product/category changes to propagate quickly. Next.js will
 // revalidate the static sitemap response at this interval.
 export const revalidate = 3600; // 1 hour
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 type Frequency = 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
 
@@ -81,56 +78,53 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     let productPages: MetadataRoute.Sitemap = [];
     let categoryPages: MetadataRoute.Sitemap = [];
 
-    if (supabaseUrl && supabaseKey) {
-        try {
-            const supabase = createClient(supabaseUrl, supabaseKey);
+    try {
+        const products = await query<{
+            slug: string;
+            updated_at: string;
+            product_images: { url: string; position: number }[];
+        }>(
+            `SELECT p.slug, p.updated_at,
+                    COALESCE(
+                      (SELECT jsonb_agg(jsonb_build_object('url', i.url, 'position', i.position) ORDER BY i.position)
+                       FROM product_images i WHERE i.product_id = p.id),
+                      '[]'::jsonb
+                    ) AS product_images
+               FROM products p
+              WHERE p.status = 'active'`
+        );
 
-            // Active products + their primary image for the image sitemap.
-            const { data: products } = await supabase
-                .from('products')
-                .select('slug, updated_at, name, product_images(url, position)')
-                .eq('status', 'active');
+        productPages = products.map((product) => {
+            const sortedImages = [...(product.product_images || [])].sort(
+                (a, b) => (a.position ?? 0) - (b.position ?? 0)
+            );
+            const primaryImage = sortedImages[0]?.url
+                ? sortedImages[0].url.startsWith('http')
+                    ? sortedImages[0].url
+                    : `${baseUrl}${sortedImages[0].url}`
+                : undefined;
 
-            if (products) {
-                productPages = products.map((product: any) => {
-                    const sortedImages = [...(product.product_images || [])].sort(
-                        (a: { position?: number }, b: { position?: number }) =>
-                            (a.position ?? 0) - (b.position ?? 0),
-                    );
-                    const primaryImage = sortedImages[0]?.url
-                        ? sortedImages[0].url.startsWith('http')
-                            ? sortedImages[0].url
-                            : `${baseUrl}${sortedImages[0].url}`
-                        : undefined;
+            return {
+                url: `${baseUrl}/product/${product.slug}`,
+                lastModified: product.updated_at ? new Date(product.updated_at) : now,
+                changeFrequency: 'weekly' as const,
+                priority: 0.75,
+                images: primaryImage ? [primaryImage] : undefined,
+            };
+        });
 
-                    return {
-                        url: `${baseUrl}/product/${product.slug}`,
-                        lastModified: product.updated_at ? new Date(product.updated_at) : now,
-                        changeFrequency: 'weekly' as const,
-                        priority: 0.75,
-                        images: primaryImage ? [primaryImage] : undefined,
-                    };
-                });
-            }
+        const categories = await query<{ slug: string; updated_at: string }>(
+            `SELECT slug, updated_at FROM categories WHERE status = 'active'`
+        );
 
-            // Active categories. There's no /categories/[slug] route, so we
-            // use the canonical filter URL /shop?category=[slug].
-            const { data: categories } = await supabase
-                .from('categories')
-                .select('slug, updated_at')
-                .eq('status', 'active');
-
-            if (categories) {
-                categoryPages = categories.map((category: any) => ({
-                    url: `${baseUrl}/shop?category=${category.slug}`,
-                    lastModified: category.updated_at ? new Date(category.updated_at) : now,
-                    changeFrequency: 'weekly' as const,
-                    priority: 0.7,
-                }));
-            }
-        } catch (error) {
-            console.error('[sitemap] error fetching dynamic entries:', error);
-        }
+        categoryPages = categories.map((category) => ({
+            url: `${baseUrl}/shop?category=${category.slug}`,
+            lastModified: category.updated_at ? new Date(category.updated_at) : now,
+            changeFrequency: 'weekly' as const,
+            priority: 0.7,
+        }));
+    } catch (error) {
+        console.error('[sitemap] error fetching dynamic entries:', error);
     }
 
     return [...staticPages, ...categoryPages, ...productPages, ...staticBlog];

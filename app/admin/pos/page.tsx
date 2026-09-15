@@ -1,7 +1,13 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { asNumber, money } from '@/lib/format-money';
+import {
+    parseStorePricingValue,
+    resolveCartLineUnitPrice,
+    resolveProductPrice,
+} from '@/lib/pricing';
 
 interface Product {
     id: string;
@@ -67,41 +73,34 @@ export default function POSPage() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            // Fetch Products
-            const { data: prodData } = await supabase
-                .from('products')
-                .select(`
-          id, name, price, quantity, sku,
-          categories(name),
-          product_images(url)
-        `)
-                .order('name');
+            const settingsRes = await apiData<{ settings: { store_pricing?: unknown } }>(
+                '/api/settings?keys=store_pricing'
+            );
+            const salesActive = parseStorePricingValue(settingsRes.settings?.store_pricing).sales_active;
 
-            if (prodData) {
-                const formatted: Product[] = prodData.map((p: any) => ({
-                    id: p.id,
-                    name: p.name,
+            const prodData = await apiData<any[]>('/api/catalog/products?status=active');
+            const productList = Array.isArray(prodData) ? prodData : [];
+            const formatted: Product[] = productList.map((p: any) => ({
+                id: p.id,
+                name: p.name,
+                price: resolveProductPrice({
+                    salesActive,
                     price: p.price,
-                    quantity: p.quantity,
-                    category: p.categories?.name || 'Uncategorized',
-                    image: p.product_images?.[0]?.url || 'https://via.placeholder.com/150',
-                    sku: p.sku
-                }));
-                setProducts(formatted);
+                    salePrice: p.sale_price,
+                    compareAtPrice: p.compare_at_price,
+                }).effective,
+                quantity: asNumber(p.quantity),
+                category: p.categories?.name || 'Uncategorized',
+                image: p.product_images?.[0]?.url || '/logo.png',
+                sku: p.sku || '',
+            }));
+            setProducts(formatted);
 
-                // Extract Categories
-                const cats = Array.from(new Set(formatted.map(p => p.category))).sort();
-                setCategories(['All', ...cats]);
-            }
+            const cats = Array.from(new Set(formatted.map((p) => p.category))).sort();
+            setCategories(['All', ...cats]);
 
-            // Fetch Customers from customers table (not profiles)
-            const { data: custData } = await supabase
-                .from('customers')
-                .select('id, full_name, email, phone')
-                .order('full_name')
-                .limit(200);
-
-            if (custData) setCustomers(custData);
+            const custData = await apiData<any[]>('/api/admin/customers');
+            setCustomers(Array.isArray(custData) ? custData.slice(0, 200) : []);
 
         } catch (error) {
             console.error('Error fetching POS data:', error);
@@ -112,31 +111,39 @@ export default function POSPage() {
 
     // Cart Functions
     const addToCart = (product: Product) => {
-        setCart(prev => {
-            const existing = prev.find(item => item.id === product.id);
+        const stock = asNumber(product.quantity);
+        if (stock <= 0) return;
+
+        setCart((prev) => {
+            const existing = prev.find((item) => item.id === product.id);
             if (existing) {
-                return prev.map(item =>
+                if (existing.cartQuantity >= stock) return prev;
+                return prev.map((item) =>
                     item.id === product.id
                         ? { ...item, cartQuantity: item.cartQuantity + 1 }
                         : item
                 );
             }
-            return [...prev, { ...product, cartQuantity: 1 }];
+            return [...prev, { ...product, quantity: stock, cartQuantity: 1 }];
         });
     };
 
     const removeFromCart = (productId: string) => {
-        setCart(prev => prev.filter(item => item.id !== productId));
+        setCart((prev) => prev.filter((item) => item.id !== productId));
     };
 
     const updateQuantity = (productId: string, delta: number) => {
-        setCart(prev => prev.map(item => {
-            if (item.id === productId) {
-                const newQty = item.cartQuantity + delta;
-                return newQty > 0 ? { ...item, cartQuantity: newQty } : item;
-            }
-            return item;
-        }));
+        setCart((prev) =>
+            prev
+                .map((item) => {
+                    if (item.id !== productId) return item;
+                    const stock = asNumber(item.quantity);
+                    const next = Math.min(stock, item.cartQuantity + delta);
+                    if (next <= 0) return null;
+                    return { ...item, cartQuantity: next };
+                })
+                .filter((item): item is CartItem => item != null)
+        );
     };
 
     const emptyCart = () => setCart([]);
@@ -144,7 +151,7 @@ export default function POSPage() {
     // Computed
     const filteredProducts = useMemo(() => {
         return products.filter(p => {
-            const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            const matchesSearch = (p.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                 p.sku?.toLowerCase().includes(searchQuery.toLowerCase());
             const matchesCat = activeCategory === 'All' || p.category === activeCategory;
             return matchesSearch && matchesCat;
@@ -162,15 +169,15 @@ export default function POSPage() {
         );
     }, [customers, customerSearch]);
 
-    const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
+    const cartTotal = cart.reduce((sum, item) => sum + asNumber(item.price) * item.cartQuantity, 0);
     const tax = cartTotal * 0.0;
     const grandTotal = cartTotal + tax;
     const changeDue = amountTendered ? (parseFloat(amountTendered) - grandTotal) : 0;
 
     // Get the customer email and phone for the order
     const getOrderEmail = () => {
-        if (selectedCustomer) return selectedCustomer.email;
-        return guestDetails.email || 'pos-walkin@store.local';
+        if (selectedCustomer?.email?.trim()) return selectedCustomer.email.trim();
+        return guestDetails.email.trim() || 'pos-walkin@store.local';
     };
 
     const getOrderPhone = () => {
@@ -232,6 +239,40 @@ export default function POSPage() {
             const customerPhone = getOrderPhone();
 
             const isCashOrCard = paymentMethod === 'cash' || paymentMethod === 'card';
+            const cartIds = [...new Set(cart.map((i) => i.id))];
+
+            const settingsRes = await apiData<{ settings: { store_pricing?: unknown } }>(
+                '/api/settings?keys=store_pricing'
+            );
+            const checkoutSalesActive = parseStorePricingValue(
+                settingsRes.settings?.store_pricing
+            ).sales_active;
+            const checkoutProducts = await apiData<any[]>('/api/catalog/products?status=active');
+            const checkoutList = Array.isArray(checkoutProducts) ? checkoutProducts : [];
+            const checkoutProductMap = new Map(
+                checkoutList.filter((p) => cartIds.includes(p.id)).map((p: any) => [p.id, p])
+            );
+
+            let posSubtotal = 0;
+            const resolvedLines: { item: CartItem; unit: number }[] = [];
+            for (const item of cart) {
+                const p = checkoutProductMap.get(item.id);
+                if (!p) throw new Error(`Product not found: ${item.name}`);
+                const unit = resolveCartLineUnitPrice(p, undefined, checkoutSalesActive);
+                posSubtotal += unit * item.cartQuantity;
+                resolvedLines.push({ item, unit });
+            }
+            const posTax = 0;
+            const posGrand = posSubtotal + posTax;
+
+            if (paymentMethod === 'cash') {
+                const tendered = parseFloat(amountTendered || '0');
+                if (tendered < posGrand) {
+                    setCheckoutError('Insufficient amount tendered');
+                    setProcessing(false);
+                    return;
+                }
+            }
 
             // Build shipping/billing address
             const addressData = selectedCustomer ? {
@@ -254,56 +295,34 @@ export default function POSPage() {
                 pos_sale: true
             };
 
-            // 1. Create Order
-            const { data: order, error: orderError } = await supabase
-                .from('orders')
-                .insert([{
-                    order_number: orderNumber,
-                    user_id: null,
-                    email: customerEmail,
-                    phone: customerPhone,
-                    status: isCashOrCard ? 'processing' : 'pending',
-                    payment_status: isCashOrCard ? 'paid' : 'pending',
-                    currency: 'GHS',
-                    subtotal: cartTotal,
-                    tax_total: tax,
-                    shipping_total: 0,
-                    discount_total: 0,
-                    total: grandTotal,
-                    shipping_method: deliveryMethod,
-                    payment_method: paymentMethod === 'momo' ? 'moolre' : paymentMethod,
-                    shipping_address: addressData,
-                    billing_address: addressData,
-                    metadata: {
-                        pos_sale: true,
-                        first_name: addressData.firstName,
-                        last_name: addressData.lastName,
-                        phone: customerPhone
-                    }
-                }])
-                .select()
-                .single();
+            const shippingData = {
+                firstName: addressData.firstName,
+                lastName: addressData.lastName,
+                email: customerEmail,
+                phone: customerPhone,
+                address: addressData.address,
+                city: addressData.city,
+                region: addressData.region,
+            };
 
-            if (orderError) throw orderError;
+            const order = await apiData<any>('/api/admin/pos/checkout', {
+                method: 'POST',
+                json: {
+                    orderNumber,
+                    trackingNumber: `SLI-POS-${Date.now()}`,
+                    shippingData,
+                    deliveryMethod,
+                    paymentMethod: paymentMethod === 'momo' ? 'moolre' : paymentMethod,
+                    cart: cart.map((item) => ({
+                        id: item.id,
+                        name: item.name,
+                        quantity: item.cartQuantity,
+                        image: item.image,
+                    })),
+                    markPaid: isCashOrCard,
+                },
+            });
 
-            // 2. Create Order Items (with product_name, unit_price, total_price)
-            const orderItems = cart.map(item => ({
-                order_id: order.id,
-                product_id: item.id,
-                product_name: item.name,
-                quantity: item.cartQuantity,
-                unit_price: item.price,
-                total_price: item.price * item.cartQuantity,
-                metadata: { image: item.image, pos_sale: true }
-            }));
-
-            const { error: itemsError } = await supabase
-                .from('order_items')
-                .insert(orderItems);
-
-            if (itemsError) throw itemsError;
-
-            // 3. Upsert Customer Record (email is required in customers table)
             const hasRealEmail = customerEmail && customerEmail !== 'pos-walkin@store.local';
             const upsertEmail = hasRealEmail
                 ? customerEmail
@@ -313,58 +332,32 @@ export default function POSPage() {
 
             if (upsertEmail) {
                 try {
-                    await supabase.rpc('upsert_customer_from_order', {
-                        p_email: upsertEmail,
-                        p_phone: customerPhone || null,
-                        p_full_name: customerName || null,
-                        p_first_name: addressData.firstName || null,
-                        p_last_name: addressData.lastName || null,
-                        p_user_id: null,
-                        p_address: addressData
-                    });
-                    // Refresh customer list silently
-                    supabase.from('customers').select('id, full_name, email, phone').order('full_name').limit(200)
-                        .then(({ data }) => { if (data) setCustomers(data); });
+                    const custData = await apiData<any[]>('/api/admin/customers');
+                    setCustomers(Array.isArray(custData) ? custData.slice(0, 200) : []);
                 } catch (custErr) {
-                    console.error('Customer upsert error (non-fatal):', custErr);
+                    console.error('Customer refresh error (non-fatal):', custErr);
                 }
             }
 
-            // 4. If Cash or Card — mark as paid, reduce stock
             if (isCashOrCard) {
-                // Call mark_order_paid to reduce stock (uses order_number as order_ref)
-                try {
-                    await supabase.rpc('mark_order_paid', {
-                        order_ref: orderNumber,
-                        moolre_ref: `POS-${paymentMethod.toUpperCase()}-${Date.now()}`
-                    });
-                } catch (stockErr) {
-                    console.error('Stock reduction error (non-fatal):', stockErr);
-                }
-
-                // Success — show completed
-                setCompletedOrder({ id: order.id, orderNumber, total: grandTotal, items: cart });
+                setCompletedOrder({ id: order.id, orderNumber, total: posGrand, items: cart });
                 setCart([]);
 
-                // Send notification
                 if (customerEmail && customerEmail !== 'pos-walkin@store.local') {
-                    const { data: { session } } = await supabase.auth.getSession();
                     fetch('/api/notifications', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` })
-                        },
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
                         body: JSON.stringify({
                             type: 'order_created',
                             payload: {
                                 ...order,
                                 order_number: orderNumber,
                                 email: customerEmail,
-                                shipping_address: addressData
-                            }
-                        })
-                    }).catch(err => console.error('POS Notification error:', err));
+                                shipping_address: addressData,
+                            },
+                        }),
+                    }).catch((err) => console.error('POS Notification error:', err));
                 }
             }
 
@@ -375,7 +368,7 @@ export default function POSPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         orderId: orderNumber,
-                        amount: grandTotal,
+                        amount: posGrand,
                         customerEmail: customerEmail
                     })
                 });
@@ -390,7 +383,7 @@ export default function POSPage() {
                 setCompletedOrder({
                     id: order.id,
                     orderNumber,
-                    total: grandTotal,
+                    total: posGrand,
                     items: cart,
                     paymentUrl: paymentResult.url,
                     paymentPending: true
@@ -440,7 +433,7 @@ export default function POSPage() {
                             placeholder="Search products..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 text-sm"
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary text-sm"
                             autoFocus
                         />
                     </div>
@@ -450,7 +443,7 @@ export default function POSPage() {
                                 key={cat}
                                 onClick={() => setActiveCategory(cat)}
                                 className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeCategory === cat
-                                    ? 'bg-brand-espresso text-white shadow-md'
+                                    ? 'bg-store-navy text-white shadow-md'
                                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                     }`}
                             >
@@ -471,11 +464,17 @@ export default function POSPage() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-20 lg:pb-4">
-                            {filteredProducts.map(product => (
+                            {filteredProducts.map((product) => {
+                                const outOfStock = asNumber(product.quantity) <= 0;
+                                return (
                                 <div
                                     key={product.id}
-                                    onClick={() => addToCart(product)}
-                                    className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden border border-gray-100 group flex flex-col h-full"
+                                    onClick={() => !outOfStock && addToCart(product)}
+                                    className={`bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 group flex flex-col h-full ${
+                                      outOfStock
+                                        ? 'opacity-60 cursor-not-allowed'
+                                        : 'hover:shadow-md transition-shadow cursor-pointer'
+                                    }`}
                                 >
                                     <div className="aspect-square relative bg-gray-50 shrink-0">
                                         <img
@@ -483,21 +482,28 @@ export default function POSPage() {
                                             alt={product.name}
                                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                         />
-                                        <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm">
-                                            Qty: {product.quantity}
+                                        <div className={`absolute top-2 right-2 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm ${
+                                          outOfStock ? 'bg-red-600/90' : 'bg-black/60'
+                                        }`}>
+                                            {outOfStock ? 'Out of stock' : `Qty: ${product.quantity}`}
                                         </div>
                                     </div>
                                     <div className="p-3 flex flex-col flex-1">
                                         <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 mb-auto">{product.name}</h3>
                                         <div className="flex items-center justify-between mt-2 pt-2">
-                                            <span className="text-brand-espresso font-bold">GH₵{product.price.toFixed(2)}</span>
-                                            <button className="w-8 h-8 rounded-full bg-brand-nude/30 text-brand-espresso flex items-center justify-center group-hover:bg-brand-espresso group-hover:text-white transition-colors">
+                                            <span className="text-store-ink font-bold">GH₵{money(product.price)}</span>
+                                            <button
+                                              type="button"
+                                              disabled={outOfStock}
+                                              className="w-8 h-8 rounded-full bg-store-surface text-store-ink flex items-center justify-center group-hover:bg-black group-hover:text-store-primary transition-colors disabled:opacity-40"
+                                            >
                                                 <i className="ri-add-line"></i>
                                             </button>
                                         </div>
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -507,14 +513,14 @@ export default function POSPage() {
                     <div className="lg:hidden p-4 border-t border-gray-200 bg-white fixed bottom-0 left-0 right-0 z-30 shadow-2xl safe-area-bottom">
                         <button
                             onClick={() => setIsMobileCartOpen(true)}
-                            className="w-full py-3 bg-brand-espresso text-white rounded-xl font-bold flex justify-between px-6 shadow-lg active:scale-95 transition-transform"
+                            className="w-full py-3 bg-store-navy text-white rounded-xl font-bold flex justify-between px-6 shadow-lg active:scale-95 transition-transform"
                         >
                             <span className="flex items-center text-sm">
                                 <span className="bg-white/20 px-2 py-0.5 rounded mr-2">{cart.reduce((a, b) => a + b.cartQuantity, 0)}</span>
                                 Items
                             </span>
                             <span>View Cart</span>
-                            <span>GH₵{grandTotal.toFixed(2)}</span>
+                            <span>GH₵{money(grandTotal)}</span>
                         </button>
                     </div>
                 )}
@@ -532,7 +538,7 @@ export default function POSPage() {
                             Current Order
                         </h2>
                     </div>
-                    <span className="bg-brand-nude/50 text-brand-cocoa text-xs font-bold px-2 py-1 rounded-full">
+                    <span className="bg-store-surface text-store-ink text-xs font-bold px-2 py-1 rounded-full">
                         {cart.reduce((a, b) => a + b.cartQuantity, 0)} Items
                     </span>
                 </div>
@@ -543,7 +549,7 @@ export default function POSPage() {
                         <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
                             <i className="ri-shopping-cart-line text-5xl opacity-20"></i>
                             <p className="text-sm">Cart is empty</p>
-                            <button onClick={() => setIsMobileCartOpen(false)} className="lg:hidden text-brand-espresso font-medium hover:underline">
+                            <button onClick={() => setIsMobileCartOpen(false)} className="lg:hidden text-store-muted font-medium hover:underline">
                                 Start Adding Products
                             </button>
                         </div>
@@ -570,7 +576,7 @@ export default function POSPage() {
                                                 <i className="ri-add-line text-xs"></i>
                                             </button>
                                         </div>
-                                        <p className="text-sm font-bold text-gray-900">GH₵{(item.price * item.cartQuantity).toFixed(2)}</p>
+                                        <p className="text-sm font-bold text-gray-900">GH₵{money(item.price * item.cartQuantity)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -583,7 +589,7 @@ export default function POSPage() {
                     <div className="space-y-1 text-sm">
                         <div className="flex justify-between text-gray-600">
                             <span>Subtotal</span>
-                            <span>GH₵{cartTotal.toFixed(2)}</span>
+                            <span>GH₵{money(cartTotal)}</span>
                         </div>
                         <div className="flex justify-between text-gray-600">
                             <span>Tax (0%)</span>
@@ -591,7 +597,7 @@ export default function POSPage() {
                         </div>
                         <div className="flex justify-between text-xl font-bold text-gray-900 pt-2 border-t border-gray-200 mt-2">
                             <span>Total</span>
-                            <span>GH₵{grandTotal.toFixed(2)}</span>
+                            <span>GH₵{money(grandTotal)}</span>
                         </div>
                     </div>
 
@@ -606,9 +612,9 @@ export default function POSPage() {
                         <button
                             onClick={() => { setShowCheckoutModal(true); setCheckoutError(null); }}
                             disabled={cart.length === 0}
-                            className="px-4 py-3 bg-brand-espresso text-white rounded-lg hover:bg-brand-cocoa font-bold text-sm shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-3 bg-store-navy-light text-white rounded-lg hover:bg-store-navy font-bold text-sm shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Charge GH₵{grandTotal.toFixed(2)}
+                            Charge GH₵{money(grandTotal)}
                         </button>
                     </div>
                 </div>
@@ -621,8 +627,8 @@ export default function POSPage() {
                         {completedOrder ? (
                             // SUCCESS STATE
                             <div className="p-8 text-center flex flex-col items-center justify-center space-y-6 overflow-y-auto">
-                                <div className={`w-20 h-20 rounded-full flex items-center justify-center ${completedOrder.paymentPending ? 'bg-amber-100' : 'bg-brand-nude/50'}`}>
-                                    <i className={`text-5xl ${completedOrder.paymentPending ? 'ri-time-line text-amber-600' : 'ri-checkbox-circle-fill text-brand-espresso'}`}></i>
+                                <div className={`w-20 h-20 rounded-full flex items-center justify-center ${completedOrder.paymentPending ? 'bg-amber-100' : 'bg-store-surface'}`}>
+                                    <i className={`text-5xl ${completedOrder.paymentPending ? 'ri-time-line text-amber-600' : 'ri-checkbox-circle-fill text-store-muted'}`}></i>
                                 </div>
                                 <div>
                                     <h2 className="text-2xl font-bold text-gray-900">
@@ -631,9 +637,9 @@ export default function POSPage() {
                                     <p className="text-gray-500 mt-1">Order #{completedOrder.orderNumber}</p>
 
                                     {!completedOrder.paymentPending && paymentMethod === 'cash' && changeDue > 0 && (
-                                        <div className="mt-3 bg-brand-nude/30 border border-brand-nude/70 rounded-lg p-3">
-                                            <p className="text-sm text-brand-espresso">Change Due</p>
-                                            <p className="text-2xl font-bold text-brand-cocoa">GH₵{changeDue.toFixed(2)}</p>
+                                        <div className="mt-3 bg-store-surface border border-gray-200 rounded-lg p-3">
+                                            <p className="text-sm text-store-ink">Change Due</p>
+                                            <p className="text-2xl font-bold text-store-ink">GH₵{money(changeDue)}</p>
                                         </div>
                                     )}
 
@@ -657,7 +663,7 @@ export default function POSPage() {
                                                         navigator.clipboard.writeText(completedOrder.paymentUrl);
                                                         alert('Payment link copied!');
                                                     }}
-                                                    className="text-sm text-brand-espresso hover:text-brand-mauve font-medium underline"
+                                                    className="text-sm text-store-ink hover:text-store-ink font-medium underline"
                                                 >
                                                     <i className="ri-file-copy-line mr-1"></i>
                                                     Copy Link
@@ -672,7 +678,7 @@ export default function POSPage() {
                                         <i className="ri-printer-line mr-2"></i>
                                         Print Receipt
                                     </button>
-                                    <button onClick={resetCheckout} className="py-3 px-4 bg-brand-espresso text-white rounded-xl font-semibold hover:bg-brand-cocoa transition-colors">
+                                    <button onClick={resetCheckout} className="py-3 px-4 bg-store-navy-light text-white rounded-xl font-semibold hover:bg-store-navy transition-colors">
                                         New Order
                                     </button>
                                 </div>
@@ -697,9 +703,9 @@ export default function POSPage() {
                                     )}
 
                                     {/* Total Display */}
-                                    <div className="text-center py-4 bg-brand-nude/30 rounded-xl border border-brand-nude/60">
-                                        <p className="text-sm text-brand-cocoa uppercase tracking-wide font-semibold">Amount to Pay</p>
-                                        <p className="text-4xl font-extrabold text-brand-espresso mt-1">GH₵{grandTotal.toFixed(2)}</p>
+                                    <div className="text-center py-4 bg-store-surface rounded-xl border border-gray-100">
+                                        <p className="text-sm text-store-ink uppercase tracking-wide font-semibold">Amount to Pay</p>
+                                        <p className="text-4xl font-extrabold text-store-ink mt-1">GH₵{money(grandTotal)}</p>
                                     </div>
 
                                     {/* Customer Select */}
@@ -714,12 +720,12 @@ export default function POSPage() {
                                                 placeholder="Search customers by name, email, or phone..."
                                                 value={customerSearch}
                                                 onChange={(e) => setCustomerSearch(e.target.value)}
-                                                className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 outline-none text-sm"
+                                                className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary outline-none text-sm"
                                             />
                                         </div>
 
                                         <select
-                                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 outline-none mb-2"
+                                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary outline-none mb-2"
                                             onChange={(e) => {
                                                 setSelectedCustomer(customers.find(c => c.id === e.target.value) || null);
                                             }}
@@ -728,13 +734,13 @@ export default function POSPage() {
                                             <option value="">Walk-in Customer / New Guest</option>
                                             {filteredCustomers.map(c => (
                                                 <option key={c.id} value={c.id}>
-                                                    {c.full_name || 'No Name'} · {c.phone || c.email}
+                                                    {c.full_name || 'No Name'} — {c.phone || c.email}
                                                 </option>
                                             ))}
                                         </select>
 
                                         {selectedCustomer && (
-                                            <div className="bg-brand-nude/30 border border-brand-nude/70 rounded-lg p-3 mb-2 flex items-center justify-between">
+                                            <div className="bg-store-surface border border-gray-200 rounded-lg p-3 mb-2 flex items-center justify-between">
                                                 <div>
                                                     <p className="font-semibold text-gray-900 text-sm">{selectedCustomer.full_name}</p>
                                                     <p className="text-xs text-gray-600">{selectedCustomer.email} {selectedCustomer.phone && `| ${selectedCustomer.phone}`}</p>
@@ -760,14 +766,14 @@ export default function POSPage() {
                                                         placeholder="First Name *"
                                                         value={guestDetails.firstName}
                                                         onChange={e => setGuestDetails({ ...guestDetails, firstName: e.target.value })}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brand-mauve/40 text-sm"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-store-primary text-sm"
                                                     />
                                                     <input
                                                         type="text"
                                                         placeholder="Last Name"
                                                         value={guestDetails.lastName}
                                                         onChange={e => setGuestDetails({ ...guestDetails, lastName: e.target.value })}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brand-mauve/40 text-sm"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-store-primary text-sm"
                                                     />
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-3">
@@ -776,14 +782,14 @@ export default function POSPage() {
                                                         placeholder="Email"
                                                         value={guestDetails.email}
                                                         onChange={e => setGuestDetails({ ...guestDetails, email: e.target.value })}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brand-mauve/40 text-sm"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-store-primary text-sm"
                                                     />
                                                     <input
                                                         type="tel"
                                                         placeholder={paymentMethod === 'momo' ? 'Phone (Required) *' : 'Phone'}
                                                         value={guestDetails.phone}
                                                         onChange={e => setGuestDetails({ ...guestDetails, phone: e.target.value })}
-                                                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-brand-mauve/40 text-sm ${paymentMethod === 'momo' && !guestDetails.phone ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
+                                                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-store-primary text-sm ${paymentMethod === 'momo' && !guestDetails.phone ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
                                                             }`}
                                                     />
                                                 </div>
@@ -798,26 +804,26 @@ export default function POSPage() {
                                             <button
                                                 onClick={() => setDeliveryMethod('pickup')}
                                                 className={`p-3 rounded-lg border transition-all flex items-center space-x-3 ${deliveryMethod === 'pickup'
-                                                    ? 'border-brand-espresso bg-brand-nude/30 ring-1 ring-brand-espresso'
+                                                    ? 'border-store-muted bg-store-surface ring-1 ring-store-primary'
                                                     : 'border-gray-200 hover:border-gray-300'
                                                     }`}
                                             >
-                                                <i className={`ri-store-2-line text-xl ${deliveryMethod === 'pickup' ? 'text-brand-espresso' : 'text-gray-400'}`}></i>
+                                                <i className={`ri-store-2-line text-xl ${deliveryMethod === 'pickup' ? 'text-store-ink' : 'text-gray-400'}`}></i>
                                                 <div className="text-left">
-                                                    <p className={`text-sm font-semibold ${deliveryMethod === 'pickup' ? 'text-brand-cocoa' : 'text-gray-700'}`}>Store Pickup</p>
+                                                    <p className={`text-sm font-semibold ${deliveryMethod === 'pickup' ? 'text-store-ink' : 'text-gray-700'}`}>Store Pickup</p>
                                                     <p className="text-xs text-gray-500">Customer picks up</p>
                                                 </div>
                                             </button>
                                             <button
                                                 onClick={() => setDeliveryMethod('doorstep')}
                                                 className={`p-3 rounded-lg border transition-all flex items-center space-x-3 ${deliveryMethod === 'doorstep'
-                                                    ? 'border-brand-espresso bg-brand-nude/30 ring-1 ring-brand-espresso'
+                                                    ? 'border-store-muted bg-store-surface ring-1 ring-store-primary'
                                                     : 'border-gray-200 hover:border-gray-300'
                                                     }`}
                                             >
-                                                <i className={`ri-truck-line text-xl ${deliveryMethod === 'doorstep' ? 'text-brand-espresso' : 'text-gray-400'}`}></i>
+                                                <i className={`ri-truck-line text-xl ${deliveryMethod === 'doorstep' ? 'text-store-ink' : 'text-gray-400'}`}></i>
                                                 <div className="text-left">
-                                                    <p className={`text-sm font-semibold ${deliveryMethod === 'doorstep' ? 'text-brand-cocoa' : 'text-gray-700'}`}>Doorstep Delivery</p>
+                                                    <p className={`text-sm font-semibold ${deliveryMethod === 'doorstep' ? 'text-store-ink' : 'text-gray-700'}`}>Doorstep Delivery</p>
                                                     <p className="text-xs text-gray-500">Deliver to address</p>
                                                 </div>
                                             </button>
@@ -825,9 +831,9 @@ export default function POSPage() {
 
                                         {/* Delivery Address (shown for doorstep delivery) */}
                                         {deliveryMethod === 'doorstep' && (
-                                            <div className="mt-3 bg-brand-nude/30 p-4 rounded-lg border border-brand-nude/70 space-y-3">
+                                            <div className="mt-3 bg-store-surface p-4 rounded-lg border border-gray-200 space-y-3">
                                                 <h4 className="text-sm font-bold text-gray-900 flex items-center">
-                                                    <i className="ri-map-pin-line mr-2 text-brand-espresso"></i>
+                                                    <i className="ri-map-pin-line mr-2 text-store-muted"></i>
                                                     Delivery Address
                                                 </h4>
                                                 <input
@@ -835,7 +841,7 @@ export default function POSPage() {
                                                     placeholder="Street Address / Location *"
                                                     value={guestDetails.address}
                                                     onChange={e => setGuestDetails({ ...guestDetails, address: e.target.value })}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brand-mauve/40 text-sm"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-store-primary text-sm"
                                                 />
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <input
@@ -843,12 +849,12 @@ export default function POSPage() {
                                                         placeholder="City / Town *"
                                                         value={guestDetails.city}
                                                         onChange={e => setGuestDetails({ ...guestDetails, city: e.target.value })}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brand-mauve/40 text-sm"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-store-primary text-sm"
                                                     />
                                                     <select
                                                         value={guestDetails.region}
                                                         onChange={e => setGuestDetails({ ...guestDetails, region: e.target.value })}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brand-mauve/40 text-sm"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-store-primary text-sm"
                                                     >
                                                         <option value="">Select Region *</option>
                                                         {ghanaRegions.map(r => (
@@ -873,7 +879,7 @@ export default function POSPage() {
                                                     key={method.key}
                                                     onClick={() => setPaymentMethod(method.key)}
                                                     className={`py-3 rounded-lg font-medium border transition-all flex flex-col items-center space-y-1 ${paymentMethod === method.key
-                                                        ? 'border-brand-espresso bg-brand-nude/30 text-brand-cocoa ring-1 ring-brand-espresso'
+                                                        ? 'border-store-muted bg-store-surface text-store-ink ring-1 ring-store-primary'
                                                         : 'border-gray-200 hover:border-gray-300 text-gray-600'
                                                         }`}
                                                 >
@@ -894,13 +900,13 @@ export default function POSPage() {
                                                     type="number"
                                                     value={amountTendered}
                                                     onChange={(e) => setAmountTendered(e.target.value)}
-                                                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 outline-none font-bold text-lg"
+                                                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary outline-none font-bold text-lg"
                                                     placeholder="0.00"
                                                     autoFocus
                                                 />
                                             </div>
                                             {changeDue > 0 && (
-                                                <p className="text-right text-brand-espresso font-bold mt-2">Change: GH₵{changeDue.toFixed(2)}</p>
+                                                <p className="text-right text-store-muted font-bold mt-2">Change: GH₵{money(changeDue)}</p>
                                             )}
                                             {changeDue < 0 && amountTendered && (
                                                 <p className="text-right text-red-500 font-medium mt-2">Insufficient amount</p>
@@ -913,7 +919,7 @@ export default function POSPage() {
                                                         onClick={() => setAmountTendered(amount.toString())}
                                                         className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors"
                                                     >
-                                                        GH₵{amount.toFixed(2)}
+                                                        GH₵{money(amount)}
                                                     </button>
                                                 ))}
                                             </div>
@@ -935,10 +941,10 @@ export default function POSPage() {
 
                                     {/* Card info */}
                                     {paymentMethod === 'card' && (
-                                        <div className="bg-brand-nude/30 border border-brand-nude/70 rounded-lg p-3">
+                                        <div className="bg-store-surface border border-gray-200 rounded-lg p-3">
                                             <div className="flex items-start space-x-2">
-                                                <i className="ri-bank-card-line text-brand-espresso mt-0.5"></i>
-                                                <div className="text-sm text-brand-cocoa">
+                                                <i className="ri-bank-card-line text-store-muted mt-0.5"></i>
+                                                <div className="text-sm text-store-ink">
                                                     <p className="font-semibold">Card Payment</p>
                                                     <p className="mt-1">Process the card payment on your POS terminal, then tap &quot;Complete Payment&quot; to confirm.</p>
                                                 </div>

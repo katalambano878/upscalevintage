@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 import CSVGuide from './CSVGuide';
 import ProgressTracker, { type ProgressState, type ProductLogEntry } from './ProgressTracker';
 import ResultsSummary, { type ImportSummary, type ImportError } from './ResultsSummary';
@@ -47,12 +46,6 @@ export default function ImportForm() {
 
   const startImport = async () => {
     if (!canSubmit || loading) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      setStreamError('You must be logged in to import.');
-      return;
-    }
-
     setLoading(true);
     setProgress({ phase: 'validating', current: 0, total: 1, message: 'Starting...' });
     setProductLog([]);

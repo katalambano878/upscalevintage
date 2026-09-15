@@ -1,5 +1,6 @@
 import type { Viewport } from "next";
 import Script from "next/script";
+import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { WishlistProvider } from "@/context/WishlistContext";
 import {
@@ -103,13 +104,15 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
-        <CartProvider>
-          <WishlistProvider>
-            <div id="main-content">
-              {children}
-            </div>
-          </WishlistProvider>
-        </CartProvider>
+        <AuthProvider>
+          <CartProvider>
+            <WishlistProvider>
+              <div id="main-content">
+                {children}
+              </div>
+            </WishlistProvider>
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { supabase } from '@/lib/supabase';
+import { query } from '@/lib/db';
 import { escapeHtml } from '@/lib/sanitize';
 import { APP_TITLE, EMAIL_FROM_DEFAULT, ADMIN_EMAIL_DEFAULT } from '@/lib/brand';
 
@@ -220,11 +220,11 @@ export async function sendOrderConfirmation(order: any) {
     // Fetch order items to get preorder_shipping info
     let shippingNotes: string[] = [];
     try {
-        const { data: items } = await supabase
-            .from('order_items')
-            .select('product_name, metadata')
-            .eq('order_id', id);
-        if (items) {
+        const items = await query<{ product_name: string; metadata: Record<string, unknown> | null }>(
+            `SELECT product_name, metadata FROM order_items WHERE order_id = $1`,
+            [id]
+        );
+        if (items.length) {
             for (const item of items) {
                 const preorder = item.metadata?.preorder_shipping;
                 if (preorder) {

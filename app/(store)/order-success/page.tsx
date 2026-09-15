@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { Suspense, useState, useEffect, useMemo } from 'react';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { asNumber, money } from '@/lib/format-money';
 
 function OrderSuccessContent() {
   const searchParams = useSearchParams();
@@ -14,6 +15,20 @@ function OrderSuccessContent() {
   const [showConfetti, setShowConfetti] = useState(true);
   const [verifying, setVerifying] = useState(false);
 
+  // Stable confetti positions — Math.random() in render causes hydration crashes.
+  const confetti = useMemo(
+    () =>
+      Array.from({ length: 50 }, (_, i) => ({
+        left: ((i * 37) % 100) + (i % 7),
+        top: -((i * 13) % 20),
+        delay: (i % 30) / 10,
+        duration: 3 + (i % 20) / 10,
+        icon: (['heart', 'star', 'gift'] as const)[i % 3],
+        color: (['blue', 'amber', 'blue'] as const)[i % 3],
+      })),
+    []
+  );
+
   useEffect(() => {
     async function fetchOrder() {
       if (!orderNumber) {
@@ -22,16 +37,7 @@ function OrderSuccessContent() {
       }
 
       try {
-        const { data: orderData, error } = await supabase
-          .from('orders')
-          .select(`
-                    *,
-                    order_items (*)
-                `)
-          .eq('order_number', orderNumber)
-          .single();
-
-        if (error) throw error;
+        const orderData = await apiData<any>(`/api/orders/summary?order_number=${encodeURIComponent(orderNumber)}`);
         setOrder(orderData);
 
         // If redirected from payment and order is still pending, try to verify
@@ -55,11 +61,9 @@ function OrderSuccessContent() {
     await new Promise(resolve => setTimeout(resolve, 3000));
     
     // Re-fetch order to check if callback already updated it
-    const { data: refreshed } = await supabase
-      .from('orders')
-      .select('*, order_items (*)')
-      .eq('order_number', orderNum)
-      .single();
+    const refreshed = await apiData<any>(
+      `/api/orders/summary?order_number=${encodeURIComponent(orderNum)}`
+    ).catch(() => null);
     
     if (refreshed?.payment_status === 'paid') {
       setOrder(refreshed);
@@ -81,11 +85,9 @@ function OrderSuccessContent() {
       
       if (result.success && result.payment_status === 'paid') {
         // Re-fetch full order data
-        const { data: updated } = await supabase
-          .from('orders')
-          .select('*, order_items (*)')
-          .eq('order_number', orderNum)
-          .single();
+        const updated = await apiData<any>(
+          `/api/orders/summary?order_number=${encodeURIComponent(orderNum)}`
+        ).catch(() => null);
         if (updated) setOrder(updated);
       }
     } catch (err) {
@@ -99,7 +101,7 @@ function OrderSuccessContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <i className="ri-loader-4-line text-4xl text-brand-espresso animate-spin mb-4 block"></i>
+          <i className="ri-loader-4-line text-4xl text-store-ink animate-spin mb-4 block"></i>
           <p className="text-gray-500">Loading order details...</p>
         </div>
       </div>
@@ -114,7 +116,7 @@ function OrderSuccessContent() {
           <i className="ri-error-warning-line text-4xl text-red-500 mb-4 block"></i>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Order Not Found</h1>
           <p className="text-gray-600 mb-6">We couldn't locate the order details.</p>
-          <Link href="/shop" className="text-brand-espresso font-semibold hover:underline">
+          <Link href="/shop" className="text-store-ink font-semibold hover:underline">
             Return to Shop
           </Link>
         </div>
@@ -124,24 +126,26 @@ function OrderSuccessContent() {
 
   const orderDate = new Date(order.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const estimatedDelivery = new Date(new Date(order.created_at).getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-  const pointsEarned = Math.floor(order.total / 10); // Example logic: 1 point per 10 currency units
+  const pointsEarned = Math.floor(asNumber(order.total) / 10);
+  const orderItems = Array.isArray(order.order_items) ? order.order_items : [];
+  const balanceDue = asNumber(order.metadata?.balance_due, asNumber(order.total) / 2);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-brand-cream via-white to-brand-nude/30">
+    <main className="min-h-screen bg-gradient-to-br from-store-surface via-white to-store-surface">
       {showConfetti && (
         <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
-          {[...Array(50)].map((_, i) => (
+          {confetti.map((piece, i) => (
             <div
               key={i}
               className="absolute animate-fall"
               style={{
-                left: `${Math.random() * 100}%`,
-                top: `-${Math.random() * 20}%`,
-                animationDelay: `${Math.random() * 3}s`,
-                animationDuration: `${3 + Math.random() * 2}s`
+                left: `${piece.left}%`,
+                top: `${piece.top}%`,
+                animationDelay: `${piece.delay}s`,
+                animationDuration: `${piece.duration}s`,
               }}
             >
-              <i className={`ri-${['heart', 'star', 'gift'][Math.floor(Math.random() * 3)]}-fill text-${['blue', 'amber', 'blue'][Math.floor(Math.random() * 3)]}-500 text-xl opacity-70`}></i>
+              <i className={`ri-${piece.icon}-fill text-${piece.color}-500 text-xl opacity-70`}></i>
             </div>
           ))}
         </div>
@@ -150,16 +154,30 @@ function OrderSuccessContent() {
       <section className="py-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12 text-center mb-8">
-            <div className="w-24 h-24 flex items-center justify-center mx-auto mb-6 bg-brand-nude/50 rounded-full">
-              <i className="ri-checkbox-circle-fill text-6xl text-brand-espresso"></i>
+            <div className="w-24 h-24 flex items-center justify-center mx-auto mb-6 bg-store-surface rounded-full">
+              <i className="ri-checkbox-circle-fill text-6xl text-store-muted"></i>
             </div>
 
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Order Confirmed!</h1>
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">
+              {order.payment_status === 'partially_paid' ? 'Deposit Received!' : 'Order Confirmed!'}
+            </h1>
             <p className="text-xl text-gray-600 mb-8">
-              Thank you for your purchase. We're processing your order now.
+              {order.payment_status === 'partially_paid'
+                ? `Thank you. Half payment received. Remaining GH₵ ${money(balanceDue)} is due before pickup or delivery.`
+                : order.payment_status === 'paid'
+                  ? "Thank you for your purchase. We're processing your order now."
+                  : 'Thank you. Your order was placed — complete payment if you have not already.'}
             </p>
+            {order.payment_status === 'partially_paid' && (
+              <Link
+                href={`/pay/${order.order_number}`}
+                className="inline-flex items-center bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-lg font-semibold mb-8"
+              >
+                Pay Remaining Balance
+              </Link>
+            )}
 
-            <div className="bg-brand-nude/30 rounded-xl p-6 mb-8">
+            <div className="bg-store-surface rounded-xl p-6 mb-8">
               <div className="grid md:grid-cols-3 gap-6 text-center">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Order Number</p>
@@ -171,7 +189,7 @@ function OrderSuccessContent() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Estimated Delivery</p>
-                  <p className="text-lg font-bold text-brand-espresso">{estimatedDelivery}</p>
+                  <p className="text-lg font-bold text-store-ink">{estimatedDelivery}</p>
                 </div>
               </div>
             </div>
@@ -179,7 +197,7 @@ function OrderSuccessContent() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
               <Link
                 href={`/account?tab=orders`}
-                className="bg-brand-espresso hover:bg-brand-cocoa text-white px-8 py-4 rounded-lg font-semibold transition-colors inline-flex items-center justify-center whitespace-nowrap"
+                className="bg-store-navy hover:bg-store-navy-light text-white px-8 py-4 rounded-lg font-semibold transition-colors inline-flex items-center justify-center whitespace-nowrap"
               >
                 <i className="ri-file-list-3-line mr-2"></i>
                 View Order
@@ -218,7 +236,7 @@ function OrderSuccessContent() {
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Order Items</h2>
               <div className="space-y-4">
-                {order.order_items.map((item: any) => (
+                {orderItems.map((item: any) => (
                   <div key={item.id} className="flex items-center space-x-4">
                     <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200">
                       <img
@@ -239,23 +257,23 @@ function OrderSuccessContent() {
                         </p>
                       )}
                     </div>
-                    <p className="font-bold text-gray-900">GH₵{item.unit_price.toFixed(2)}</p>
+                    <p className="font-bold text-gray-900">GH₵{money(item.unit_price)}</p>
                   </div>
                 ))}
               </div>
               <div className="border-t border-gray-200 mt-4 pt-4">
                 <div className="flex justify-between text-sm text-gray-600 mb-2">
                   <span>Subtotal</span>
-                  <span>GH₵{order.subtotal.toFixed(2)}</span>
+                  <span>GH₵{money(order.subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-gray-600 mb-2">
                   <span>Shipping</span>
-                  <span>GH₵{order.shipping_total.toFixed(2)}</span>
+                  <span>GH₵{money(order.shipping_total)}</span>
                 </div>
 
                 <div className="flex justify-between text-xl font-bold text-gray-900 border-t border-gray-200 pt-2">
                   <span>Total Paid</span>
-                  <span>GH₵{order.total.toFixed(2)}</span>
+                  <span>GH₵{money(order.total)}</span>
                 </div>
               </div>
             </div>
@@ -293,21 +311,21 @@ function OrderSuccessContent() {
                 <h3 className="font-semibold text-gray-900 mb-3">What's Next?</h3>
                 <div className="space-y-3">
                   <div className="flex items-start space-x-3">
-                    <i className="ri-mail-line text-brand-espresso mt-1"></i>
+                    <i className="ri-mail-line text-store-ink mt-1"></i>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">Email Confirmation</p>
                       <p className="text-sm text-gray-600">Sent to {order.email}</p>
                     </div>
                   </div>
                   <div className="flex items-start space-x-3">
-                    <i className="ri-box-3-line text-brand-espresso mt-1"></i>
+                    <i className="ri-box-3-line text-store-ink mt-1"></i>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">Processing</p>
                       <p className="text-sm text-gray-600">We'll pack your order today</p>
                     </div>
                   </div>
                   <div className="flex items-start space-x-3">
-                    <i className="ri-truck-line text-brand-espresso mt-1"></i>
+                    <i className="ri-truck-line text-store-ink mt-1"></i>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">Shipping Updates</p>
                       <p className="text-sm text-gray-600">Track via email & SMS</p>
@@ -321,15 +339,15 @@ function OrderSuccessContent() {
           <div className="mt-8 text-center">
             <p className="text-gray-600 mb-4">Need help with your order?</p>
             <div className="flex flex-wrap justify-center gap-4">
-              <Link href="/contact" className="text-brand-espresso hover:text-brand-espresso font-semibold whitespace-nowrap">
+              <Link href="/contact" className="text-store-ink hover:text-store-ink font-semibold whitespace-nowrap">
                 <i className="ri-customer-service-line mr-1"></i>
                 Contact Support
               </Link>
-              <Link href="/account/orders" className="text-brand-espresso hover:text-brand-espresso font-semibold whitespace-nowrap">
+              <Link href="/account/orders" className="text-store-ink hover:text-store-ink font-semibold whitespace-nowrap">
                 <i className="ri-question-line mr-1"></i>
                 Order Help
               </Link>
-              <Link href="/returns" className="text-brand-espresso hover:text-brand-espresso font-semibold whitespace-nowrap">
+              <Link href="/returns" className="text-store-ink hover:text-store-ink font-semibold whitespace-nowrap">
                 <i className="ri-arrow-left-right-line mr-1"></i>
                 Returns Policy
               </Link>
@@ -357,7 +375,7 @@ export default function OrderSuccessPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-brand-espresso border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-16 h-16 border-4 border-store-navy border-t-transparent rounded-full animate-spin"></div>
       </div>
     }>
       <OrderSuccessContent />

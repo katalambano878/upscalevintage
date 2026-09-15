@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
 interface Banner {
@@ -35,23 +34,10 @@ export default function AnnouncementBar() {
 
     const fetchBanners = async () => {
         try {
-            const now = new Date().toISOString();
-
-            const { data, error } = await supabase
-                .from('banners')
-                .select('*')
-                .eq('is_active', true)
-                .eq('position', 'top')
-                .or(`start_date.is.null,start_date.lte.${now}`)
-                .or(`end_date.is.null,end_date.gte.${now}`)
-                .order('sort_order', { ascending: true });
-
-            if (error) {
-                console.log('Banners table may not exist yet');
-                return;
-            }
-
-            setBanners(data || []);
+            const res = await fetch('/api/storefront/banners?position=top');
+            if (!res.ok) return;
+            const data = (await res.json()) as Banner[];
+            setBanners(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error fetching banners:', error);
         }

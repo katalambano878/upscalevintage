@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import PasswordStrengthMeter from '@/components/PasswordStrengthMeter';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
 
 function getFriendlyError(message: string): string {
@@ -29,6 +29,7 @@ function getFriendlyError(message: string): string {
 
 export default function SignupPage() {
   const router = useRouter();
+  const { signUp } = useAuth();
   const errorRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState({
     firstName: '',
@@ -99,43 +100,29 @@ export default function SignupPage() {
     }
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await signUp({
         email: formData.email,
         password: formData.password,
-        options: {
-          data: {
-            first_name: formData.firstName,
-            last_name: formData.lastName,
-            phone: formData.phone,
-            newsletter: formData.newsletter
-          }
-        }
+        fullName: `${formData.firstName} ${formData.lastName}`.trim(),
+        phone: formData.phone,
       });
 
-      if (error) throw error;
+      if (error) throw new Error(error);
 
-      if (data.user) {
-        // Send Welcome Notification
-        fetch('/api/notifications', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'welcome',
-            payload: {
-              email: formData.email,
-              firstName: formData.firstName
-            }
-          })
-        }).catch(err => console.error('Welcome notification error:', err));
-        // If Supabase confirms via email, data.session might be null initially
-        if (!data.session) {
-          setSuccess(true);
-        } else {
-          // Auto-login success (if email confirming is off)
-          router.push('/account');
-          router.refresh();
-        }
-      }
+      fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'welcome',
+          payload: {
+            email: formData.email,
+            firstName: formData.firstName,
+          },
+        }),
+      }).catch((err) => console.error('Welcome notification error:', err));
+
+      router.push('/account');
+      router.refresh();
     } catch (err: any) {
       console.error('Signup error:', err);
       setAuthError(getFriendlyError(err.message || 'Failed to sign up. Please try again.'));

@@ -1,50 +1,45 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useCMS } from '@/context/CMSContext';
-import { supabase } from '@/lib/supabase';
 import PageHero from '@/components/PageHero';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import ContactInfoCards from '@/components/contact/ContactInfoCards';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
-import {
-  CONTACT_ADDRESS,
-  CONTACT_PHONE,
-  CONTACT_PHONE_DISPLAY,
-  CONTACT_WHATSAPP,
-  WHATSAPP_LINK,
-  INSTAGRAM_HANDLE,
-  INSTAGRAM_URL,
-} from '@/lib/brand';
 
-export default function ContactPage() {
+function ContactForm() {
   usePageTitle('Contact Us');
+  const searchParams = useSearchParams();
   const { getSetting } = useCMS();
+  const contactPhone = getSetting('contact_phone') || '0249628324';
+  const contactEmail = getSetting('contact_email') || 'info@mamator.com';
+  const contactAddress = getSetting('contact_address') || 'Accra, Kasoa, Koforidua';
+  const contactWhatsapp = getSetting('contact_whatsapp') || getSetting('contact_phone') || '0249628324';
   const [pageContent, setPageContent] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: '',
+    email: '',
     phone: '',
     subject: '',
-    message: '',
+    message: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const { getToken, verifying } = useRecaptcha();
 
   useEffect(() => {
-    async function fetchContactContent() {
-      const { data } = await supabase
-        .from('cms_content')
-        .select('*')
-        .eq('section', 'contact')
-        .eq('block_key', 'main')
-        .single();
-
-      if (data) {
-        setPageContent(data);
-      }
-    }
-    fetchContactContent();
-  }, []);
+    const order = searchParams.get('order') || '';
+    const subject = searchParams.get('subject') || '';
+    if (!order && !subject) return;
+    setFormData((prev) => ({
+      ...prev,
+      subject: subject || (order ? `Help with order ${order}` : prev.subject),
+      message: order
+        ? `Hi, I need help with order ${order}.\n\n`
+        : prev.message,
+    }));
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,24 +55,7 @@ export default function ContactPage() {
     }
 
     try {
-      // Store in Supabase
-      const { error } = await supabase
-        .from('contact_submissions')
-        .insert({
-          name: formData.name,
-          email: '',
-          phone: formData.phone,
-          subject: formData.subject,
-          message: formData.message,
-        });
-
-      if (error) {
-        // Table might not exist, still show success
-        console.log('Note: contact_submissions table may not exist');
-      }
-
-      // Send Contact Notification
-      fetch('/api/notifications', {
+      await fetch('/api/notifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,7 +65,7 @@ export default function ContactPage() {
       }).catch(err => console.error('Contact notification error:', err));
 
       setSubmitStatus('success');
-      setFormData({ name: '', phone: '', subject: '', message: '' });
+      setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
     } catch (error) {
       setSubmitStatus('error');
     } finally {
@@ -95,110 +73,53 @@ export default function ContactPage() {
     }
   };
 
-  const contactPhone = getSetting('contact_phone') || CONTACT_PHONE_DISPLAY;
-  const contactWhatsapp = getSetting('contact_whatsapp') || CONTACT_WHATSAPP;
-  const contactAddress = getSetting('contact_address') || CONTACT_ADDRESS;
-  const instagramUrl = getSetting('social_instagram') || INSTAGRAM_URL;
-
-  const heroSubtitle =
-    pageContent?.subtitle ||
-    'Orders, imports, appliances, or style questions? Reach us by phone, WhatsApp, or in person.';
-
-  const waLink = WHATSAPP_LINK;
-  const rawPhone = (getSetting('contact_phone') || CONTACT_PHONE).replace(/\s/g, '');
-  const telLink = rawPhone.startsWith('0') ? `tel:+233${rawPhone.slice(1)}` : `tel:${rawPhone}`;
-  const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contactAddress)}`;
-
-  const contactMethods = [
-    {
-      icon: 'ri-phone-line',
-      title: 'Call Us',
-      value: contactPhone,
-      link: telLink,
-      description: 'Mon to Sat, 9am to 6pm',
-    },
-    {
-      icon: 'ri-whatsapp-line',
-      title: 'WhatsApp',
-      value: contactWhatsapp,
-      link: waLink,
-      description: 'Fastest way to reach us',
-    },
-    {
-      icon: 'ri-instagram-line',
-      title: 'Instagram',
-      value: INSTAGRAM_HANDLE,
-      link: instagramUrl,
-      description: 'DM us for drops, imports & orders',
-    },
-    {
-      icon: 'ri-map-pin-line',
-      title: 'Visit Us',
-      value: contactAddress,
-      link: mapsLink,
-      description: 'Hatso · Agbogba · Accra',
-    },
-  ];
+  const heroTitle = pageContent?.title || 'Get In Touch';
+  const heroSubtitle = pageContent?.subtitle || 'Have a question or need assistance?';
+  const heroContent = pageContent?.content || 'Our friendly team is here to help. Send us a message using the form below.';
 
   const faqs = [
     {
-      question: 'How do I place or reserve an order?',
-      answer:
-        'Browse the shop, add items to your cart, or message us on WhatsApp or Instagram. For imported or pre-order pieces, use Reserve Your Order on the homepage or contact us directly.',
+      question: 'What are your delivery times?',
+      answer: 'Standard delivery takes 2-5 business days within Ghana. Express delivery is available for Accra and Kumasi. We pack every tee order with care.'
     },
     {
-      question: 'What are your delivery times?',
-      answer:
-        'Standard delivery within Ghana usually takes 2 to 5 business days. Accra and nearby areas may qualify for faster options; we will confirm when you order.',
+      question: 'Do you offer international shipping?',
+      answer: 'Currently, we ship within Ghana only. Many of our products are imported from China, so we handle all international logistics on our end. You simply order and receive.'
     },
     {
       question: 'What payment methods do you accept?',
-      answer:
-        'We accept Mobile Money (MOMO), instant bank transfer, and card payments where available. Payment on delivery is not offered.',
-    },
+      answer: 'We accept mobile money (MTN, Vodafone, AirtelTigo) and credit/debit cards through our secure Moolre payment gateway.'
+    }
   ];
 
-  const inputClass =
-    'w-full px-4 py-3 border border-brand-nude rounded-xl bg-white text-brand-cocoa text-sm focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-mauve transition-colors';
-  const labelClass = 'block text-sm font-medium text-brand-espresso mb-2';
-
   return (
-    <div className="min-h-screen bg-brand-cream">
+    <div className="min-h-screen bg-white">
       <PageHero
-        title={pageContent?.title || 'Get In Touch'}
-        subtitle={heroSubtitle}
+        title="Get In Touch"
+        subtitle="Have a question about our collections or your order? We’re here to help."
+        backgroundImage="/hero-tee-graphic.jpg"
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
-          {contactMethods.map((method, index) => (
-            <a
-              key={index}
-              href={method.link}
-              target={method.link.startsWith('http') ? '_blank' : '_self'}
-              rel={method.link.startsWith('http') ? 'noopener noreferrer' : undefined}
-              className="group bg-white border border-brand-nude/80 p-6 rounded-2xl shadow-soft hover:shadow-luxury hover:border-brand-mauve/40 transition-all"
-            >
-              <div className="w-12 h-12 bg-brand-nude/60 rounded-full flex items-center justify-center mb-4 group-hover:bg-brand-mauve/15 transition-colors">
-                <i className={`${method.icon} text-2xl text-brand-espresso`} />
-              </div>
-              <h3 className="font-display text-lg text-brand-espresso mb-2">{method.title}</h3>
-              <p className="text-brand-espresso font-medium mb-1 text-sm leading-snug">{method.value}</p>
-              <p className="text-sm text-brand-cocoa/65">{method.description}</p>
-            </a>
-          ))}
-        </div>
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10 pb-4">
+        <ContactInfoCards
+          phone={contactPhone}
+          email={contactEmail}
+          address={contactAddress}
+          whatsapp={contactWhatsapp}
+        />
+      </div>
 
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
         <div className="grid lg:grid-cols-2 gap-12">
-          <div className="bg-white border border-brand-nude/60 rounded-3xl p-6 sm:p-8 shadow-soft">
-            <h2 className="text-3xl sm:text-4xl font-display text-brand-espresso mb-3 tracking-tight">Send Us a Message</h2>
-            <p className="text-brand-cocoa/75 mb-8 font-light leading-relaxed">
-              Share your name, phone number, and what you need. We will reply by call or WhatsApp.
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">Send Us a Message</h2>
+            <p className="text-gray-600 mb-8">
+              Fill out the form below and we'll get back to you as soon as possible.
             </p>
 
             <form id="contactForm" onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label htmlFor="name" className={labelClass}>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
                   Full Name *
                 </label>
                 <input
@@ -208,29 +129,44 @@ export default function ContactPage() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className={inputClass}
-                  placeholder="Your name"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-store-primary/40 focus:border-store-primary text-sm"
+                  placeholder="John Doe"
                 />
               </div>
 
               <div>
-                <label htmlFor="phone" className={labelClass}>
-                  Phone / WhatsApp Number *
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address *
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-store-primary/40 focus:border-store-primary text-sm"
+                  placeholder="john@example.com"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone Number
                 </label>
                 <input
                   type="tel"
                   id="phone"
                   name="phone"
-                  required
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className={inputClass}
-                  placeholder="e.g. 054 503 5799"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-store-primary/40 focus:border-store-primary text-sm"
+                  placeholder="+233 XX XXX XXXX"
                 />
               </div>
 
               <div>
-                <label htmlFor="subject" className={labelClass}>
+                <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
                   Subject *
                 </label>
                 <input
@@ -240,13 +176,13 @@ export default function ContactPage() {
                   required
                   value={formData.subject}
                   onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                  className={inputClass}
-                  placeholder="Order, reservation, product question…"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-store-primary/40 focus:border-store-primary text-sm"
+                  placeholder="Order inquiry, product question, etc."
                 />
               </div>
 
               <div>
-                <label htmlFor="message" className={labelClass}>
+                <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
                   Message *
                 </label>
                 <textarea
@@ -257,109 +193,82 @@ export default function ContactPage() {
                   maxLength={500}
                   value={formData.message}
                   onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                  className={`${inputClass} resize-none`}
-                  placeholder="Tell us what you are looking for…"
-                />
-                <p className="text-xs text-brand-cocoa/50 mt-1">{formData.message.length}/500 characters</p>
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-store-primary/40 focus:border-store-primary resize-none text-sm"
+                  placeholder="Tell us how we can help you..."
+                ></textarea>
+                <p className="text-xs text-gray-500 mt-1">{formData.message.length}/500 characters</p>
               </div>
 
               {submitStatus === 'success' && (
-                <div className="bg-brand-nude/50 border border-brand-mauve/30 text-brand-espresso px-4 py-3 rounded-xl text-sm">
-                  <i className="ri-check-line mr-2 text-brand-mauve" />
-                  Message received! We will get back to you on WhatsApp or by phone soon.
+                <div className="bg-store-surface border border-gray-200 text-store-ink px-4 py-3 rounded-xl">
+                  <i className="ri-check-line mr-2"></i>
+                  Message sent successfully! We'll respond within 24 hours.
                 </div>
               )}
 
               {submitStatus === 'error' && (
-                <div className="bg-red-50 border border-red-200/80 text-red-800 px-4 py-3 rounded-xl text-sm">
-                  <i className="ri-error-warning-line mr-2" />
-                  Something went wrong. Please try again or message us on WhatsApp.
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
+                  <i className="ri-error-warning-line mr-2"></i>
+                  Failed to send message. Please try again or contact us directly.
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={isSubmitting || verifying}
-                className="w-full btn-luxury-primary py-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-store-navy text-white py-4 rounded-xl font-medium hover:bg-store-navy-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer"
               >
-                {isSubmitting || verifying ? (verifying ? 'Verifying…' : 'Sending…') : 'Send Message'}
+                {isSubmitting || verifying ? (verifying ? 'Verifying...' : 'Sending...') : 'Send Message'}
               </button>
             </form>
           </div>
 
           <div>
-            <h2 className="text-3xl sm:text-4xl font-display text-brand-espresso mb-3 tracking-tight">Quick Answers</h2>
-            <p className="brand-body mb-8">
-              Common questions about orders, delivery, and payments
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">Quick Answers</h2>
+            <p className="text-gray-600 mb-8">
+              Find answers to common questions before reaching out
             </p>
 
             <div className="space-y-4 mb-12">
               {faqs.map((faq, index) => (
-                <details
-                  key={index}
-                  className="bg-white border border-brand-nude/60 rounded-2xl overflow-hidden group"
-                >
-                  <summary className="px-6 py-4 font-medium text-brand-espresso cursor-pointer hover:bg-brand-nude/30 transition-colors list-none flex items-center justify-between gap-4">
-                    <span>{faq.question}</span>
-                    <i className="ri-add-line text-brand-mauve group-open:hidden shrink-0" />
-                    <i className="ri-subtract-line text-brand-mauve hidden group-open:inline shrink-0" />
+                <details key={index} className="bg-gray-50 rounded-xl overflow-hidden">
+                  <summary className="px-6 py-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors">
+                    {faq.question}
                   </summary>
-                  <div className="px-6 pb-5 text-brand-cocoa/75 leading-relaxed text-sm font-light border-t border-brand-nude/40 pt-4">
+                  <div className="px-6 pb-4 text-gray-600 leading-relaxed">
                     {faq.answer}
                   </div>
                 </details>
               ))}
             </div>
-
-            <div className="bg-gradient-to-br from-brand-espresso to-brand-cocoa p-8 rounded-3xl text-brand-cream shadow-luxury">
-              <div className="w-12 h-12 bg-white/15 rounded-full flex items-center justify-center mb-4">
-                <i className="ri-customer-service-2-line text-2xl" />
-              </div>
-              <h3 className="text-2xl font-display mb-3">Need a quick reply?</h3>
-              <p className="text-brand-nude/95 mb-6 leading-relaxed font-medium text-sm sm:text-base">
-                For orders, reservations, and style questions, WhatsApp is usually fastest. We are available Mon to Sat, 9am to 6pm.
-              </p>
-              <a
-                href={waLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-brand-cream text-brand-espresso px-6 py-3 rounded-full font-medium hover:bg-white transition-colors"
-              >
-                <i className="ri-whatsapp-line text-xl text-[#25D366]" />
-                Chat on WhatsApp
-              </a>
-            </div>
           </div>
         </div>
       </div>
 
-      <section className="bg-white border-t border-brand-nude/50 py-16">
+      <div className="bg-gray-50 py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
-            <span className="brand-eyebrow mb-3 block">In person</span>
-            <h2 className="text-2xl sm:text-3xl font-display text-brand-espresso mb-4">Visit Our Space</h2>
-            <p className="brand-body mb-8 max-w-xl mx-auto">
-              Prefer to see pieces in person or pick up an order? Stop by our location in Accra. We are happy to help
-              with orders, reservations, imports, and curated finds.
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">Need More Help?</h2>
+            <p className="text-gray-600 mb-6 leading-relaxed">
+              Share as much detail as you can in your message so we can assist you quickly and effectively.
             </p>
-            <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-6 text-brand-cocoa/80 text-sm">
-              <a
-                href={mapsLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 hover:text-brand-mauve transition-colors"
-              >
-                <i className="ri-map-pin-2-line text-brand-espresso text-lg" />
-                <span>{contactAddress}</span>
-              </a>
-              <div className="inline-flex items-center justify-center gap-2">
-                <i className="ri-time-line text-brand-espresso text-lg" />
-                <span>Mon to Sat: 9am to 6pm</span>
-              </div>
-            </div>
           </div>
         </div>
-      </section>
+      </div>
     </div>
+  );
+}
+
+export default function ContactPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[40vh] flex items-center justify-center">
+          <i className="ri-loader-4-line animate-spin text-3xl text-store-primary" />
+        </div>
+      }
+    >
+      <ContactForm />
+    </Suspense>
   );
 }

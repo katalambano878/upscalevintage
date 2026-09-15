@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { query, queryOne } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 import {
     searchProducts,
     getProductForCart,
@@ -37,11 +38,8 @@ import {
     getClientIdentifier,
     RATE_LIMITS as SHARED_RATE_LIMITS,
 } from '@/lib/rate-limit';
-import { getPublicSupabaseCredentials, isSupabaseConfigured } from '@/lib/supabase-config';
-
 // ─── Env ────────────────────────────────────────────────────────────────────
 
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const groqKey = process.env.GROQ_API_KEY;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -498,42 +496,10 @@ Address the customer by their first name. You can access their orders and profil
 
 // ─── Auth Detection ─────────────────────────────────────────────────────────
 
-async function detectAuth(
-    request: Request,
-    supabaseUrl: string,
-    supabaseAnonKey: string,
-): Promise<{ userId: string | null; email: string | null }> {
+async function detectAuth(): Promise<{ userId: string | null; email: string | null }> {
     try {
-        const cookieHeader = request.headers.get('cookie') || '';
-        const authToken = cookieHeader
-            .split(';')
-            .map((c) => c.trim())
-            .find((c) => c.startsWith('sb-') && c.includes('-auth-token'))
-            ?.split('=')
-            .slice(1)
-            .join('=');
-
-        if (!authToken) return { userId: null, email: null };
-
-        const decoded = decodeURIComponent(authToken);
-        let tokenData: any;
-        try {
-            tokenData = JSON.parse(decoded);
-        } catch {
-            tokenData = decoded;
-        }
-
-        const accessToken = typeof tokenData === 'string' ? tokenData : tokenData?.[0] || tokenData?.access_token;
-        if (!accessToken) return { userId: null, email: null };
-
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            global: { headers: { Authorization: `Bearer ${accessToken}` } },
-        });
-
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            return { userId: user.id, email: user.email || null };
-        }
+        const user = await getCurrentUser();
+        if (user) return { userId: user.id, email: user.email };
     } catch (e) {
         console.error('[Chat API] Auth detection error:', e);
     }
@@ -550,16 +516,6 @@ export async function POST(request: Request) {
         const userText = (newMessage || '').trim();
         if (!userText) {
             return NextResponse.json({ error: 'Message is required' }, { status: 400 });
-        }
-
-        if (!isSupabaseConfigured()) {
-            return NextResponse.json(
-                {
-                    message: `Our chat assistant is temporarily unavailable. Reach us directly at ${SUPPORT_EMAIL} or WhatsApp ${WHATSAPP_LINK}.`,
-                    quickReplies: ['Contact us'],
-                },
-                { status: 200 },
-            );
         }
 
         // Two-tier rate limit: per-IP (catches abuse) + per-session (catches UI spam).
@@ -582,19 +538,11 @@ export async function POST(request: Request) {
             }
         }
 
-        const { url: supabaseUrl, anonKey: supabaseKey } = getPublicSupabaseCredentials();
-
-        const { userId, email: userEmail } = await detectAuth(request, supabaseUrl, supabaseKey);
-
-        // SECURITY: tools that act on behalf of the (possibly unauthenticated)
-        // caller run with the ANON key so RLS protects other customers' data.
-        // Writes / privileged reads use the service-role client.
-        const supabase = createClient(supabaseUrl, supabaseKey);
-        const supabaseWriter = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : supabase;
+        const { userId, email: userEmail } = await detectAuth();
 
         let profile: ChatCustomerProfile | null = null;
         if (userId) {
-            profile = await getCustomerProfile(supabaseWriter, userId);
+            profile = await getCustomerProfile(undefined, userId);
         }
 
         // Fetch AI memories for this customer (RPC returns up to 25 ordered by
@@ -603,11 +551,11 @@ export async function POST(request: Request) {
         let aiMemories: AiMemoryRow[] = [];
         if (userId || userEmail) {
             try {
-                const { data: memData } = await supabaseWriter.rpc('get_ai_memories', {
-                    p_customer_id: userId || null,
-                    p_customer_email: userEmail || null,
-                });
-                aiMemories = Array.isArray(memData) ? memData : [];
+                const memRow = await queryOne<{ result: AiMemoryRow[] }>(
+                    `SELECT get_ai_memories($1::uuid, $2) AS result`,
+                    [userId, userEmail]
+                );
+                aiMemories = Array.isArray(memRow?.result) ? memRow.result : [];
             } catch {
                 /* table/RPC missing — skip */
             }
@@ -615,22 +563,22 @@ export async function POST(request: Request) {
 
         // Fetch a few relevant KB articles to ground the AI's answers. Uses a
         // simple ILIKE OR-search over title and content.
-        const kbContext = await fetchKnowledgeBaseContext(supabaseWriter, userText);
+        const kbContext = await fetchKnowledgeBaseContext(userText);
 
         // Pull live categories AND a compact product catalog snapshot so the
         // AI never has to guess what the store carries — at the category
         // level OR the individual product level. Both get injected into the
         // system prompt below.
         const [categories, catalog] = await Promise.all([
-            getStoreCategories(supabase),
-            getStoreCatalogSummary(supabase),
+            getStoreCategories(),
+            getStoreCatalogSummary(),
         ]);
 
         let result: any;
         if (groqKey) {
             result = await handleWithAI(
-                supabase,
-                supabaseWriter,
+                undefined,
+                undefined,
                 messages,
                 userText,
                 groqKey,
@@ -646,14 +594,13 @@ export async function POST(request: Request) {
                 catalog,
             );
         } else {
-            result = await handleWithoutAI(supabase, userText, profile);
+            result = await handleWithoutAI(undefined, userText, profile);
         }
 
         // Fire-and-forget: persist transcript, derive analytics, refresh
         // insights, save auto-memories. None of this blocks the response.
         if (sessionId) {
             persistConversation(
-                supabaseWriter,
                 sessionId,
                 userId,
                 userEmail,
@@ -666,13 +613,11 @@ export async function POST(request: Request) {
         }
 
         if (userId || userEmail) {
-            Promise.resolve(
-                supabaseWriter.rpc('upsert_customer_insight', {
-                    p_customer_id: userId || null,
-                    p_customer_email: userEmail || null,
-                    p_customer_name: profile?.name || null,
-                }),
-            ).catch(() => undefined);
+            query(`SELECT upsert_customer_insight($1::uuid, $2, $3)`, [
+                userId,
+                userEmail,
+                profile?.name || null,
+            ]).catch(() => undefined);
         }
 
         return NextResponse.json(result);
@@ -1417,7 +1362,7 @@ function generateQuickReplies(
  * Failures (e.g. the KB table doesn't exist yet) are swallowed so the chat
  * keeps working even before the migration is applied.
  */
-async function fetchKnowledgeBaseContext(supabaseWriter: any, userText: string): Promise<string> {
+async function fetchKnowledgeBaseContext(userText: string): Promise<string> {
     try {
         const searchTerms = userText
             .toLowerCase()
@@ -1426,26 +1371,25 @@ async function fetchKnowledgeBaseContext(supabaseWriter: any, userText: string):
             .slice(0, 4);
         if (searchTerms.length === 0) return '';
 
-        const orFilter = searchTerms
-            .map((t) => {
-                const safe = t.replace(/[%,()\\]/g, '');
-                return `title.ilike.%${safe}%,content.ilike.%${safe}%`;
-            })
-            .join(',');
+        const patterns = searchTerms.map((t) => `%${t.replace(/[%_]/g, '')}%`);
+        const kbArticles = await query<{ title: string; content: string }>(
+            `SELECT title, content
+               FROM support_knowledge_base
+              WHERE is_published = true
+                AND (
+                  title ILIKE ANY($1::text[])
+                  OR content ILIKE ANY($1::text[])
+                )
+              LIMIT 3`,
+            [patterns]
+        );
 
-        const { data: kbArticles } = await supabaseWriter
-            .from('support_knowledge_base')
-            .select('title, content, slug, category')
-            .eq('is_published', true)
-            .or(orFilter)
-            .limit(3);
-
-        if (!kbArticles || kbArticles.length === 0) return '';
+        if (kbArticles.length === 0) return '';
 
         return (
             '\n\nKNOWLEDGE BASE (admin-curated FAQ — use these to answer if relevant):\n' +
             kbArticles
-                .map((a: any) => `- **${a.title}**: ${(a.content || '').slice(0, 280)}`)
+                .map((a) => `- **${a.title}**: ${(a.content || '').slice(0, 280)}`)
                 .join('\n')
         );
     } catch {
@@ -1463,7 +1407,6 @@ async function fetchKnowledgeBaseContext(supabaseWriter: any, userText: string):
  * Called fire-and-forget from POST — never blocks the user-facing response.
  */
 async function persistConversation(
-    supabase: any,
     sessionId: string,
     userId: string | null,
     userEmail: string | null,
@@ -1517,32 +1460,32 @@ async function persistConversation(
     const isEscalated = !!result.ticketCard;
     const summary = `Customer asked about: ${userText.slice(0, 100)}${userText.length > 100 ? '...' : ''}`;
 
-    // Upsert rolling transcript + metadata via the RPC.
     try {
-        await supabase.rpc('upsert_chat_conversation', {
-            p_session_id: sessionId,
-            p_user_id: userId,
-            p_messages: last20,
-            p_metadata: {
-                lastActivity: new Date().toISOString(),
-                lastUserMessage: userText.slice(0, 200),
-                hadProducts: (result.products?.length || 0) > 0,
-                hadOrderCard: !!result.orderCard,
-                hadTicket: !!result.ticketCard,
-            },
-        });
+        await query(
+            `SELECT upsert_chat_conversation($1, $2::uuid, $3::jsonb, $4::jsonb)`,
+            [
+                sessionId,
+                userId,
+                JSON.stringify(last20),
+                JSON.stringify({
+                    lastActivity: new Date().toISOString(),
+                    lastUserMessage: userText.slice(0, 200),
+                    hadProducts: (result.products?.length || 0) > 0,
+                    hadOrderCard: !!result.orderCard,
+                    hadTicket: !!result.ticketCard,
+                }),
+            ]
+        );
     } catch (e) {
         console.error('[Chat API] upsert_chat_conversation failed:', e);
-        return; // can't write derived analytics without a row
+        return;
     }
 
-    // Backfill analytics columns on the conversation row.
     try {
-        const { data: existingConv } = await supabase
-            .from('chat_conversations')
-            .select('id, created_at')
-            .eq('session_id', sessionId)
-            .maybeSingle();
+        const existingConv = await queryOne<{ id: string; created_at: string }>(
+            `SELECT id, created_at FROM chat_conversations WHERE session_id = $1`,
+            [sessionId]
+        );
 
         if (!existingConv) return;
 
@@ -1550,55 +1493,56 @@ async function persistConversation(
             (Date.now() - new Date(existingConv.created_at).getTime()) / 1000,
         );
 
-        await supabase
-            .from('chat_conversations')
-            .update({
+        await query(
+            `UPDATE chat_conversations
+                SET sentiment = $2,
+                    category = $3,
+                    intent = $4,
+                    summary = $5,
+                    message_count = $6,
+                    customer_email = $7,
+                    customer_name = $8,
+                    is_resolved = $9,
+                    is_escalated = $10,
+                    escalated_at = $11,
+                    page_context = $12,
+                    duration_seconds = $13
+              WHERE id = $1`,
+            [
+                existingConv.id,
                 sentiment,
                 category,
                 intent,
                 summary,
-                message_count: messageCount,
-                customer_email: userEmail || profile?.email || null,
-                customer_name: profile?.name || null,
-                is_resolved: isResolved,
-                is_escalated: isEscalated,
-                escalated_at: isEscalated ? new Date().toISOString() : null,
-                page_context: pagePath || null,
-                duration_seconds: durationSeconds,
-            })
-            .eq('id', existingConv.id);
+                messageCount,
+                userEmail || profile?.email || null,
+                profile?.name || null,
+                isResolved,
+                isEscalated,
+                isEscalated ? new Date().toISOString() : null,
+                pagePath || null,
+                durationSeconds,
+            ]
+        );
 
-        // Auto-save AI memory on negative sentiment so future chats acknowledge
-        // the past friction.
         if (sentiment === 'negative' && (userId || userEmail)) {
-            await supabase
-                .from('ai_memory')
-                .insert({
-                    customer_id: userId || null,
-                    customer_email: userEmail || null,
-                    memory_type: 'issue',
-                    content: `Had a negative experience: "${userText.slice(0, 150)}"`,
-                    importance: 'high',
-                    source_conversation_id: existingConv.id,
-                });
+            await query(
+                `INSERT INTO ai_memory (customer_id, customer_email, memory_type, content, importance, source_conversation_id)
+                 VALUES ($1, $2, 'issue', $3, 'high', $4)`,
+                [userId, userEmail, `Had a negative experience: "${userText.slice(0, 150)}"`, existingConv.id]
+            );
         }
 
-        // Auto-save a preference memory whenever a product search lands.
         if (category === 'product' && result.products?.length > 0 && (userId || userEmail)) {
             const productNames = result.products
                 .slice(0, 3)
-                .map((p: any) => p.name)
+                .map((p: { name: string }) => p.name)
                 .join(', ');
-            await supabase
-                .from('ai_memory')
-                .insert({
-                    customer_id: userId || null,
-                    customer_email: userEmail || null,
-                    memory_type: 'preference',
-                    content: `Interested in: ${productNames}`,
-                    importance: 'normal',
-                    source_conversation_id: existingConv.id,
-                });
+            await query(
+                `INSERT INTO ai_memory (customer_id, customer_email, memory_type, content, importance, source_conversation_id)
+                 VALUES ($1, $2, 'preference', $3, 'normal', $4)`,
+                [userId, userEmail, `Interested in: ${productNames}`, existingConv.id]
+            );
         }
     } catch (e) {
         console.error('[Chat API] persistence analytics failed:', e);

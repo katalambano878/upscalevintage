@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { asNumber, money } from '@/lib/format-money';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, AreaChart, Area, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function AnalyticsPage() {
@@ -39,52 +40,22 @@ export default function AnalyticsPage() {
 
       const isoStart = startDate.toISOString();
 
-      // Fetch Orders for Revenue & Count - only PAID orders count as revenue
-      const { data: orders, error: orderError } = await supabase
-        .from('orders')
-        .select('id, created_at, total, payment_status')
-        .gte('created_at', isoStart)
-        .eq('payment_status', 'paid') // Only count paid orders as revenue
-        .neq('status', 'cancelled')
-        .order('created_at');
+      const orders = (await apiData<any[]>('/api/orders')).filter(
+        (o) =>
+          new Date(o.created_at) >= startDate &&
+          o.payment_status === 'paid' &&
+          o.status !== 'cancelled'
+      );
 
-      if (orderError) throw orderError;
-
-      // Fetch Order Items for Products & Categories
-      // This might be heavy for large DBs, but fine for typical small shop admin
-      const { data: items, error: itemError } = await supabase
-        .from('order_items')
-        .select(`
-            *,
-            products (name, categories(name))
-         `)
-        .gte('created_at', isoStart); // Assuming order_items has created_at or join orders.. 
-      // Actually order_items usually doesn't have created_at directly in some schemas, 
-      // so we should join orders to filter by date.
-      // Simpler: fetch order_items for the fetched orders IDs.
-
-      let validItems: any[] = [];
-      if (orders && orders.length > 0) {
-        const orderIds = orders.map(o => o.id);
-        const { data: fetchedItems, error: itemFetchError } = await supabase
-          .from('order_items')
-          .select(`
-            quantity, 
-            unit_price, 
-            total_price,
-            product_id,
-            products!inner(name, category_id, categories(name))
-          `)
-          .in('order_id', orderIds);
-
-        if (itemFetchError) {
-          console.error('Error fetching order items:', itemFetchError);
+      const validItems: any[] = [];
+      for (const o of orders) {
+        for (const item of o.order_items || []) {
+          validItems.push({ ...item, order_id: o.id });
         }
-        if (fetchedItems) validItems = fetchedItems;
       }
 
       // Process Metrics
-      const totalRevenue = orders?.reduce((sum, o) => sum + (o.total || 0), 0) || 0;
+      const totalRevenue = orders?.reduce((sum, o) => sum + asNumber(o.total), 0) || 0;
       const totalOrders = orders?.length || 0;
       const aov = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
@@ -119,7 +90,7 @@ export default function AnalyticsPage() {
       orders?.forEach(o => {
         const dateKey = new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         if (salesMap[dateKey]) {
-          salesMap[dateKey].sales += o.total || 0;
+          salesMap[dateKey].sales += asNumber(o.total);
           salesMap[dateKey].orders += 1;
         }
       });
@@ -132,7 +103,9 @@ export default function AnalyticsPage() {
         const catName = item.products?.categories?.name || 'Uncategorized';
         if (!catMap[catName]) catMap[catName] = { name: catName, value: 0 };
         // Use total_price if available, otherwise calculate from unit_price * quantity
-        const itemRevenue = item.total_price || (item.unit_price * item.quantity) || 0;
+        const itemRevenue =
+          asNumber(item.total_price) ||
+          asNumber(item.unit_price) * asNumber(item.quantity);
         catMap[catName].value += itemRevenue;
       });
       // Convert to array for Recharts Pie
@@ -144,9 +117,11 @@ export default function AnalyticsPage() {
       validItems.forEach(item => {
         const pName = item.products?.name || 'Unknown';
         if (!prodMap[pName]) prodMap[pName] = { name: pName, revenue: 0, units: 0 };
-        const itemRevenue = item.total_price || (item.unit_price * item.quantity) || 0;
+        const itemRevenue =
+          asNumber(item.total_price) ||
+          asNumber(item.unit_price) * asNumber(item.quantity);
         prodMap[pName].revenue += itemRevenue;
-        prodMap[pName].units += item.quantity;
+        prodMap[pName].units += asNumber(item.quantity);
       });
       const topProdArray = Object.values(prodMap).sort((a: any, b: any) => b.revenue - a.revenue).slice(0, 5);
       setTopProducts(topProdArray);
@@ -176,14 +151,14 @@ export default function AnalyticsPage() {
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso font-medium pr-8 cursor-pointer bg-white"
+              className="px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary font-medium pr-8 cursor-pointer bg-white"
             >
               <option value="7days">Last 7 Days</option>
               <option value="30days">Last 30 Days</option>
               <option value="90days">Last 90 Days</option>
               <option value="year">This Year</option>
             </select>
-            <button className="bg-brand-espresso hover:bg-brand-cocoa text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center">
+            <button className="bg-store-navy hover:bg-store-navy text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center">
               <i className="ri-download-line mr-2"></i>
               Export
             </button>
@@ -200,10 +175,10 @@ export default function AnalyticsPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-brand-nude/50 rounded-lg">
-                <i className="ri-money-dollar-circle-line text-2xl text-brand-espresso"></i>
+              <div className="w-12 h-12 flex items-center justify-center bg-store-surface rounded-lg">
+                <i className="ri-money-dollar-circle-line text-2xl text-store-ink"></i>
               </div>
-              <span className="text-brand-espresso font-semibold text-sm">Live</span>
+              <span className="text-store-ink font-semibold text-sm">Live</span>
             </div>
             <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
             <p className="text-3xl font-bold text-gray-900">GH₵{metrics.revenue.toLocaleString()}</p>
@@ -211,8 +186,8 @@ export default function AnalyticsPage() {
 
           <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-brand-nude/50 rounded-lg">
-                <i className="ri-shopping-cart-line text-2xl text-brand-espresso"></i>
+              <div className="w-12 h-12 flex items-center justify-center bg-store-surface rounded-lg">
+                <i className="ri-shopping-cart-line text-2xl text-store-ink"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">Total Orders</p>
@@ -221,12 +196,12 @@ export default function AnalyticsPage() {
 
           <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-purple-100 rounded-lg">
-                <i className="ri-bar-chart-box-line text-2xl text-purple-700"></i>
+              <div className="w-12 h-12 flex items-center justify-center bg-store-primary/15 rounded-lg">
+                <i className="ri-bar-chart-box-line text-2xl text-store-primary"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">Avg. Order Value</p>
-            <p className="text-3xl font-bold text-gray-900">GH₵{metrics.aov.toFixed(2)}</p>
+            <p className="text-3xl font-bold text-gray-900">GH₵{money(metrics.aov)}</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-6">
@@ -313,7 +288,7 @@ export default function AnalyticsPage() {
                     <tr key={index}>
                       <td className="py-3 text-sm font-medium text-gray-900">{product.name}</td>
                       <td className="py-3 text-right text-sm text-gray-600">{product.units}</td>
-                      <td className="py-3 text-right text-sm font-semibold text-brand-espresso">GH₵{product.revenue.toLocaleString()}</td>
+                      <td className="py-3 text-right text-sm font-semibold text-store-muted">GH₵{product.revenue.toLocaleString()}</td>
                     </tr>
                   ))}
                   {topProducts.length === 0 && <tr><td colSpan={3} className="text-center py-4 text-gray-500">No sales data yet.</td></tr>}

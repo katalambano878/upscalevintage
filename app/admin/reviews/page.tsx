@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useState, useEffect, useCallback } from 'react';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
 
 export default function AdminReviewsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
@@ -9,54 +9,40 @@ export default function AdminReviewsPage() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchReviews();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
-  }, []);
-
-  const fetchReviews = async () => {
+  const fetchReviews = useCallback(async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('reviews')
-        .select(`
-          *,
-          profiles:user_id (full_name, email),
-          products:product_id (name, product_images (url))
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        // Graceful fallback if table doesn't exist or permissions fail
-        console.warn('Error fetching reviews:', error);
-        // setReviews([]); // Keep empty
-      } else if (data) {
-        const formatted = data.map((r: any) => ({
+      const data = await apiData<any[]>(`/api/admin/reviews?status=${statusFilter === 'all' ? 'all' : statusFilter}`);
+      const rows = Array.isArray(data) ? data : [];
+      const formatted = rows.map((r: any) => ({
           id: r.id,
           customer: {
-            name: r.profiles?.full_name || 'Anonymous',
-            email: r.profiles?.email || 'N/A',
-            avatar: getInitials(r.profiles?.full_name || r.profiles?.email)
+            name: r.reviewer_name || 'Anonymous',
+            email: 'N/A',
+            avatar: getInitials(r.reviewer_name || 'A')
           },
           product: {
-            name: r.products?.name || 'Unknown Product',
-            image: r.products?.product_images?.[0]?.url || 'https://via.placeholder.com/150'
+            name: r.product_name || 'Unknown Product',
+            image: '/logo.png',
           },
           rating: r.rating,
           title: r.title,
           comment: r.content,
           date: new Date(r.created_at).toLocaleDateString(),
-          status: r.status || 'Pending',
-          helpful: r.helpful || 0
+          status: r.status || 'pending',
+          helpful: r.helpful_votes || 0,
         }));
-        setReviews(formatted);
-      }
+      setReviews(formatted);
     } catch (error) {
       console.error('Error fetching reviews:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
 
   const getInitials = (name: string) => {
     if (!name) return '??';
@@ -70,19 +56,19 @@ export default function AdminReviewsPage() {
   };
 
   const filteredReviews = reviews.filter(r =>
-    statusFilter === 'all' || r.status.toLowerCase() === statusFilter
+    statusFilter === 'all' || String(r.status || '').toLowerCase() === statusFilter
   );
 
   const stats = {
     total: reviews.length,
-    pending: reviews.filter(r => r.status.toLowerCase() === 'pending').length,
-    approved: reviews.filter(r => r.status.toLowerCase() === 'approved').length,
-    rejected: reviews.filter(r => r.status.toLowerCase() === 'rejected').length
+    pending: reviews.filter(r => String(r.status || '').toLowerCase() === 'pending').length,
+    approved: reviews.filter(r => String(r.status || '').toLowerCase() === 'approved').length,
+    rejected: reviews.filter(r => String(r.status || '').toLowerCase() === 'rejected').length
   };
 
   const statusColors: any = {
     'Pending': 'bg-amber-100 text-amber-700',
-    'Approved': 'bg-brand-nude/50 text-brand-espresso',
+    'Approved': 'bg-store-surface text-store-ink',
     'Rejected': 'bg-red-100 text-red-700'
   };
 
@@ -110,12 +96,10 @@ export default function AdminReviewsPage() {
       if (action === 'Reject') newStatus = 'Rejected';
 
       if (newStatus) {
-        const { error } = await supabase
-          .from('reviews')
-          .update({ status: newStatus })
-          .in('id', selectedReviews);
-
-        if (error) throw error;
+        const dbStatus = newStatus.toLowerCase();
+        for (const id of selectedReviews) {
+          await apiData('/api/admin/reviews', { method: 'PATCH', json: { id, status: dbStatus } });
+        }
         fetchReviews();
         setSelectedReviews([]);
       }
@@ -150,7 +134,7 @@ export default function AdminReviewsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <button
           onClick={() => setStatusFilter('all')}
-          className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === 'all' ? 'border-brand-espresso bg-brand-nude/30' : 'border-gray-200 bg-white'
+          className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === 'all' ? 'border-store-navy bg-store-surface' : 'border-gray-200 bg-white'
             }`}
         >
           <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
@@ -162,14 +146,14 @@ export default function AdminReviewsPage() {
             }`}
         >
           <p className="text-2xl font-bold text-amber-700">{stats.pending}</p>
-          <p className="text-sm text-gray-600 mt-1">Pending Review</p>
+          <p className="text-sm text-gray-600 mt-1">Pending Reviews</p>
         </button>
         <button
           onClick={() => setStatusFilter('approved')}
-          className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === 'approved' ? 'border-brand-espresso bg-brand-nude/30' : 'border-gray-200 bg-white'
+          className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === 'approved' ? 'border-store-navy bg-store-surface' : 'border-gray-200 bg-white'
             }`}
         >
-          <p className="text-2xl font-bold text-brand-espresso">{stats.approved}</p>
+          <p className="text-2xl font-bold text-store-ink">{stats.approved}</p>
           <p className="text-sm text-gray-600 mt-1">Approved</p>
         </button>
         <button
@@ -188,7 +172,7 @@ export default function AdminReviewsPage() {
             <h2 className="text-lg font-bold text-gray-900 text-transform capitalize">
               {statusFilter === 'all' ? 'All Reviews' : `${statusFilter} Reviews`}
             </h2>
-            <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso font-medium cursor-pointer">
+            <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary font-medium cursor-pointer">
               <option>Sort by Date</option>
               <option>Sort by Rating</option>
               <option>Sort by Helpful</option>
@@ -197,14 +181,14 @@ export default function AdminReviewsPage() {
         </div>
 
         {selectedReviews.length > 0 && (
-          <div className="p-4 bg-brand-nude/30 border-b border-brand-nude/70 flex items-center justify-between">
-            <p className="text-brand-cocoa font-semibold">
+          <div className="p-4 bg-store-surface border-b border-gray-200 flex items-center justify-between">
+            <p className="text-store-ink font-semibold">
               {selectedReviews.length} review{selectedReviews.length > 1 ? 's' : ''} selected
             </p>
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => handleBulkAction('Approve')}
-                className="px-4 py-2 bg-brand-espresso hover:bg-brand-cocoa text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
+                className="px-4 py-2 bg-store-navy-light hover:bg-store-navy text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-check-line mr-2"></i>
                 Approve
@@ -229,7 +213,7 @@ export default function AdminReviewsPage() {
                     type="checkbox"
                     checked={selectedReviews.length === filteredReviews.length && filteredReviews.length > 0}
                     onChange={handleSelectAll}
-                    className="w-4 h-4 text-brand-espresso border-gray-300 rounded focus:ring-brand-mauve/40 cursor-pointer"
+                    className="w-4 h-4 text-store-ink border-gray-300 rounded focus:ring-store-primary cursor-pointer"
                   />
                 </th>
                 <th className="text-left py-4 px-4 text-sm font-semibold text-gray-700 w-1/4">Product</th>
@@ -252,7 +236,7 @@ export default function AdminReviewsPage() {
                         type="checkbox"
                         checked={selectedReviews.includes(review.id)}
                         onChange={() => handleSelectReview(review.id)}
-                        className="w-4 h-4 text-brand-espresso border-gray-300 rounded focus:ring-brand-mauve/40 cursor-pointer"
+                        className="w-4 h-4 text-store-ink border-gray-300 rounded focus:ring-store-primary cursor-pointer"
                       />
                     </td>
                     <td className="py-4 px-4">
@@ -267,7 +251,7 @@ export default function AdminReviewsPage() {
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 flex items-center justify-center bg-brand-nude/50 text-brand-espresso rounded-full text-xs font-semibold">
+                        <div className="w-8 h-8 flex items-center justify-center bg-store-surface text-store-ink rounded-full text-xs font-semibold">
                           {review.customer.avatar}
                         </div>
                         <div>

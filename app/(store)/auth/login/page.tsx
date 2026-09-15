@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { signIn } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -51,19 +52,10 @@ export default function LoginPage() {
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data.session) {
-        router.push('/account');
-        router.refresh(); // Refresh to update auth state in other components
-      }
+      const { error } = await signIn(formData.email, formData.password);
+      if (error) throw new Error(error);
+      router.push('/account');
+      router.refresh();
     } catch (error: any) {
       console.error('Login error:', error);
       setAuthError(error.message || 'Failed to sign in. Please check your credentials.');

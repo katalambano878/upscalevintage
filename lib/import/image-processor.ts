@@ -1,11 +1,12 @@
 /**
- * Upload product images to Supabase Storage and build a map of filename -> public URL.
+ * Upload product images to local disk and build a map of filename -> public URL.
  */
 
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { uploadRoot } from '@/lib/uploads';
 
-const BUCKET = 'products';
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB per image
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
 
 function getExt(name: string): string {
@@ -36,6 +37,8 @@ export async function uploadProductImages(
   const toUpload = Array.from(referencedNames).filter((name) => images.has(name));
   const total = toUpload.length;
   let current = 0;
+  const directory = join(uploadRoot(), 'products', prefix);
+  await mkdir(directory, { recursive: true });
 
   for (const filename of toUpload) {
     const buf = images.get(filename)!;
@@ -58,31 +61,27 @@ export async function uploadProductImages(
     }
 
     const base = safeStorageName(filename);
-    const path = `${prefix}/${base}`;
+    const stored = `${prefix}/${base}`;
+    const diskPath = join(uploadRoot(), 'products', stored);
 
-    const { error } = await supabaseAdmin.storage.from(BUCKET).upload(path, buf, {
-      contentType: ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'image/jpeg',
-      upsert: true,
-    });
-
-    if (error) {
+    try {
+      await writeFile(diskPath, buf);
+      const publicUrl = `/uploads/products/${stored}`;
+      urlMap.set(filename.toLowerCase().trim(), publicUrl);
+      urlMap.set(filename, publicUrl);
+      current++;
+      onProgress?.({
+        current,
+        total,
+        message: `Uploaded ${filename}`,
+      });
+    } catch (err) {
       onProgress?.({
         current: ++current,
         total,
-        message: `Failed ${filename}: ${error.message}`,
+        message: `Failed ${filename}: ${err instanceof Error ? err.message : 'write error'}`,
       });
-      continue;
     }
-
-    const { data: { publicUrl } } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
-    urlMap.set(filename.toLowerCase().trim(), publicUrl);
-    urlMap.set(filename, publicUrl);
-    current++;
-    onProgress?.({
-      current,
-      total,
-      message: `Uploaded ${filename}`,
-    });
   }
 
   return urlMap;

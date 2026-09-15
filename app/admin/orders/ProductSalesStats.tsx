@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { asNumber } from '@/lib/format-money';
 
 interface SalesStat {
     productId: string;
@@ -46,38 +47,13 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
         // 'all' leaves startDate as null
 
         try {
-            // We fetch order_items and filter by the parent order's created_at
-            let query = supabase
-                .from('order_items')
-                .select(`
-          quantity,
-          product_name,
-          product_id,
-          variant_name,
-          total_price,
-          orders!inner (
-            id,
-            created_at,
-            status,
-            payment_status
-          )
-        `);
+            const orders = await apiData<any[]>('/api/orders');
+            const map = new Map<string, SalesStat>();
 
-            // Only include paid orders (confirmed) and exclude cancelled
-            query = query.eq('orders.payment_status', 'paid').neq('orders.status', 'cancelled');
-
-            if (startDate) {
-                query = query.gte('orders.created_at', startDate);
-            }
-
-            const { data, error } = await query;
-
-            if (error) throw error;
-
-            if (data) {
-                const map = new Map<string, SalesStat>();
-
-                data.forEach((item: any) => {
+            for (const order of orders || []) {
+              if (order.payment_status !== 'paid' || order.status === 'cancelled') continue;
+              if (startDate && new Date(order.created_at) < new Date(startDate)) continue;
+              for (const item of order.order_items || []) {
                     const pid = item.product_id || item.product_name;
 
                     if (!map.has(pid)) {
@@ -93,25 +69,24 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
                     }
 
                     const entry = map.get(pid)!;
-                    entry.itemsSold += (item.quantity || 0);
-                    entry.totalRevenue += (item.total_price || 0);
+                    entry.itemsSold += asNumber(item.quantity);
+                    entry.totalRevenue += asNumber(item.total_price);
 
-                    // Track variants
                     const variantName = item.variant_name || 'Default';
                     const existing = entry.variants.get(variantName) || { quantity: 0, revenue: 0 };
-                    existing.quantity += (item.quantity || 0);
-                    existing.revenue += (item.total_price || 0);
+                    existing.quantity += asNumber(item.quantity);
+                    existing.revenue += asNumber(item.total_price);
                     entry.variants.set(variantName, existing);
 
-                    const orderId = item.orders?.id;
+                    const orderId = order.id;
                     if (orderId && !entry._orderIds.has(orderId)) {
                         entry.ordersCount++;
                         entry._orderIds.add(orderId);
                     }
-                });
+              }
+            }
 
-                // Convert to array and sort by items sold
-                const result = Array.from(map.values())
+            const result = Array.from(map.values())
                     .map(({ _orderIds, variants, ...rest }) => ({
                         ...rest,
                         variants: Array.from(variants.entries())
@@ -120,8 +95,7 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
                     }))
                     .sort((a, b) => b.itemsSold - a.itemsSold);
 
-                setStats(result);
-            }
+            setStats(result);
         } catch (err) {
             console.error('Error fetching product stats:', err);
         } finally {
@@ -160,7 +134,7 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
                             key={p}
                             onClick={() => setPeriod(p)}
                             className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${period === p
-                                    ? 'bg-brand-espresso text-white shadow-md shadow-brand-nude/50'
+                                    ? 'bg-store-navy-light text-white shadow-md shadow-gray-200'
                                     : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-transparent'
                                 }`}
                         >
@@ -184,7 +158,7 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
                             {loading ? (
                                 <tr>
                                     <td colSpan={4} className="p-12 text-center text-gray-500">
-                                        <i className="ri-loader-4-line text-3xl animate-spin text-brand-espresso mb-2 block"></i>
+                                        <i className="ri-loader-4-line text-3xl animate-spin text-store-muted mb-2 block"></i>
                                         Loading sales data...
                                     </td>
                                 </tr>
@@ -203,7 +177,7 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
                                         return (
                                     <>
                                     <tr 
-                                        className={`hover:bg-brand-nude/30/30 transition-colors ${hasVariants ? 'cursor-pointer' : ''}`}
+                                        className={`hover:bg-store-surface/30 transition-colors ${hasVariants ? 'cursor-pointer' : ''}`}
                                         onClick={() => hasVariants && setExpandedProduct(expandedProduct === s.productId ? null : s.productId)}
                                     >
                                         <td className="p-4 pl-6 font-medium text-gray-900">
@@ -215,19 +189,19 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
                                                 )}
                                                 <span>{s.productName}</span>
                                                 {hasVariants && (
-                                                    <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-semibold">
+                                                    <span className="text-[10px] bg-store-primary/15 text-store-primary px-1.5 py-0.5 rounded-full font-semibold">
                                                         {s.variants.length} variants
                                                     </span>
                                                 )}
                                             </div>
                                         </td>
                                         <td className="p-4 text-center">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-nude/50 text-brand-cocoa">
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-store-surface text-store-ink">
                                                 {s.ordersCount}
                                             </span>
                                         </td>
                                         <td className="p-4 text-center">
-                                            <span className="font-bold text-brand-espresso text-base">{s.itemsSold}</span>
+                                            <span className="font-bold text-store-ink text-base">{s.itemsSold}</span>
                                         </td>
                                         <td className="p-4 text-right pr-6 text-gray-600 font-mono">
                                             {s.totalRevenue > 0 ? s.totalRevenue.toLocaleString() : '-'}
@@ -235,10 +209,10 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
                                     </tr>
                                     {expandedProduct === s.productId && hasVariants && (
                                         s.variants.map((v) => (
-                                            <tr key={`${s.productId}-${v.name}`} className="bg-gray-50/80 border-l-2 border-purple-200">
+                                            <tr key={`${s.productId}-${v.name}`} className="bg-gray-50/80 border-l-2 border-store-primary/30">
                                                 <td className="p-3 pl-14 text-gray-600 text-xs">
                                                     <span className="inline-flex items-center space-x-1.5">
-                                                        <i className="ri-price-tag-3-line text-purple-400"></i>
+                                                        <i className="ri-price-tag-3-line text-store-muted"></i>
                                                         <span className="font-medium">{v.name}</span>
                                                     </span>
                                                 </td>

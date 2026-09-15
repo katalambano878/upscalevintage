@@ -6,9 +6,14 @@ import { useRouter } from 'next/navigation';
 import CheckoutSteps from '@/components/CheckoutSteps';
 import OrderSummary from '@/components/OrderSummary';
 import { useCart } from '@/context/CartContext';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
+import {
+  addressToShippingData,
+  shippingDataToAddressInput,
+  type AddressLike,
+} from '@/lib/address-map';
 
 export default function CheckoutPage() {
   usePageTitle('Checkout');
@@ -18,9 +23,11 @@ export default function CheckoutPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [checkoutType, setCheckoutType] = useState<'guest' | 'account'>('guest');
-  const [saveAddress, setSaveAddress] = useState(false);
+  const [saveAddress, setSaveAddress] = useState(true);
   const [savePayment, setSavePayment] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [savedAddresses, setSavedAddresses] = useState<AddressLike[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('new');
   const { getToken, verifying } = useRecaptcha();
 
   const [shippingData, setShippingData] = useState({
@@ -56,31 +63,43 @@ export default function CheckoutPage() {
 
   const [deliveryMethod, setDeliveryMethod] = useState('pickup');
   const [paymentMethod, setPaymentMethod] = useState('moolre');
+  const [paymentOption, setPaymentOption] = useState<'full' | 'half'>('full');
   const [errors, setErrors] = useState<any>({});
 
 
 
-  // Check auth and cart
+  // Check auth, load saved addresses, prefills
   useEffect(() => {
     async function checkUser() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        setCheckoutType('account'); // Auto-select account checkout if logged in
-        // Pre-fill email if available
-        setShippingData(prev => ({ ...prev, email: session.user.email || '' }));
+      try {
+        const me = await apiData<{ user: { id: string; email: string } | null }>('/api/auth/me');
+        if (!me.user) return;
+
+        setUser(me.user);
+        setCheckoutType('account');
+        const email = me.user.email || '';
+
+        try {
+          const addresses = await apiData<AddressLike[]>('/api/addresses');
+          const list = Array.isArray(addresses) ? addresses : [];
+          setSavedAddresses(list);
+          const preferred = list.find((a) => a.is_default) || list[0];
+          if (preferred) {
+            setSelectedAddressId(preferred.id);
+            setShippingData(addressToShippingData(preferred, email));
+            setSaveAddress(false);
+          } else {
+            setShippingData((prev) => ({ ...prev, email }));
+          }
+        } catch {
+          setShippingData((prev) => ({ ...prev, email }));
+        }
+      } catch {
+        /* guest checkout */
       }
     }
     checkUser();
-
-    // Small delay to ensure cart load
-    const timer = setTimeout(() => {
-      if (cart.length === 0 && !isLoading) {
-        // router.push('/cart'); // Optional: redirect if empty
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [cart, router, isLoading]);
+  }, []);
 
   // Scroll to top when step changes
   useEffect(() => {
@@ -92,6 +111,9 @@ export default function CheckoutPage() {
   const shippingCost = 0; // Delivery options temporarily disabled
   const tax = 0; // No Tax
   const total = subtotal + shippingCost + tax;
+  const dueNow =
+    paymentOption === 'half' ? Math.round((total / 2) * 100) / 100 : total;
+  const balanceDue = Math.round((total - dueNow) * 100) / 100;
 
   const validateShipping = () => {
     const newErrors: any = {};
@@ -143,110 +165,40 @@ export default function CheckoutPage() {
       const trackingId = Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
       const trackingNumber = `SLI-${trackingId}`;
 
-      // 1. Create Order
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert([{
-          order_number: orderNumber,
-          user_id: user?.id || null, // Capture user_id if logged in
-          email: shippingData.email,
-          phone: shippingData.phone,
-          status: 'pending',
-          payment_status: 'pending',
-          currency: 'GHS',
-          subtotal: subtotal,
-          tax_total: tax,
-          shipping_total: shippingCost,
-          discount_total: 0,
-          total: total,
-          shipping_method: deliveryMethod,
-          payment_method: paymentMethod,
-          shipping_address: shippingData,
-          billing_address: shippingData, // Using same for now
-          metadata: {
-            guest_checkout: !user,
-            first_name: shippingData.firstName,
-            last_name: shippingData.lastName,
-            tracking_number: trackingNumber
-          }
-        }])
-        .select()
-        .single();
+      const cartPayload = cart.map((item) => ({
+        id: item.id,
+        name: item.name,
+        slug: item.slug,
+        variant: item.variant,
+        quantity: item.quantity,
+        image: item.image,
+      }));
 
-      if (orderError) throw orderError;
-
-      // 2. Create Order Items (with UUID validation)
-      // Helper to check if string is a valid UUID
-      const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-      
-      // Build order items, resolving slugs to UUIDs if needed
-      const orderItems = [];
-      
-      // Batch-fetch product metadata (for preorder_shipping etc.)
-      const productIds = cart.map(item => item.id).filter(id => isValidUUID(id));
-      const { data: productsData } = productIds.length > 0
-        ? await supabase.from('products').select('id, metadata').in('id', productIds)
-        : { data: [] };
-      const productMetaMap = new Map((productsData || []).map((p: any) => [p.id, p.metadata]));
-      
-      for (const item of cart) {
-        let productId = item.id;
-        
-        // If id is not a valid UUID, it might be a slug - try to resolve it
-        if (!isValidUUID(productId)) {
-          const { data: product } = await supabase
-            .from('products')
-            .select('id, metadata')
-            .or(`slug.eq.${productId},id.eq.${productId}`)
-            .single();
-          
-          if (product) {
-            productId = product.id;
-            productMetaMap.set(product.id, product.metadata);
-          } else {
-            throw new Error(`Product not found: ${item.name}. Please remove it from your cart and try again.`);
-          }
-        }
-        
-        const prodMeta = productMetaMap.get(productId);
-        
-        orderItems.push({
-          order_id: order.id,
-          product_id: productId,
-          product_name: item.name,
-          variant_name: item.variant,
-          quantity: item.quantity,
-          unit_price: item.price,
-          total_price: item.price * item.quantity,
-          metadata: {
-            image: item.image,
-            slug: item.slug,
-            preorder_shipping: prodMeta?.preorder_shipping || null
-          }
-        });
-      }
-
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
-
-      if (itemsError) throw itemsError;
-
-      // Note: Stock reduction happens in mark_order_paid when payment is confirmed
-
-      // 3. Upsert Customer Record (for both guest and registered users)
-      const fullName = `${shippingData.firstName} ${shippingData.lastName}`.trim();
-      await supabase.rpc('upsert_customer_from_order', {
-        p_email: shippingData.email,
-        p_phone: shippingData.phone,
-        p_full_name: fullName,
-        p_first_name: shippingData.firstName,
-        p_last_name: shippingData.lastName,
-        p_user_id: user?.id || null,
-        p_address: shippingData
+      const order = await api<Record<string, unknown>>('/api/orders', {
+        method: 'POST',
+        json: {
+          orderNumber,
+          trackingNumber,
+          shippingData,
+          deliveryMethod,
+          paymentMethod,
+          paymentOption,
+          cart: cartPayload,
+          shippingCost,
+          tax,
+        },
       });
 
-      // 4. Handle Payment Redirects or Completion
+      // Persist address book when logged in and checkbox is on (or first address)
+      if (user && (saveAddress || savedAddresses.length === 0)) {
+        try {
+          await apiData('/api/addresses', { method: 'POST', body: shippingDataToAddressInput(shippingData, { is_default: savedAddresses.length === 0 || saveAddress  }),
+          });
+        } catch (addrErr) {
+          console.warn('Could not save address', addrErr);
+        }
+      }
+
       if (paymentMethod === 'moolre') {
         try {
           // Payment link reminder will be sent automatically after 15 mins if unpaid (via cron)
@@ -256,7 +208,6 @@ export default function CheckoutPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               orderId: orderNumber,
-              amount: total,
               customerEmail: shippingData.email
             })
           });
@@ -313,7 +264,7 @@ export default function CheckoutPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Your cart is empty</h1>
           <p className="text-gray-600 mb-8">Add some items to start the checkout process.</p>
-          <Link href="/shop" className="inline-block bg-brand-espresso text-white px-8 py-3 rounded-lg font-semibold hover:bg-brand-cocoa transition-colors">
+          <Link href="/shop" className="inline-block bg-store-navy text-white px-8 py-3 rounded-lg font-semibold hover:bg-store-navy-light transition-colors">
             Return to Shop
           </Link>
         </div>
@@ -340,33 +291,33 @@ export default function CheckoutPage() {
               <button
                 onClick={() => !user && setCheckoutType('guest')}
                 className={`p-6 rounded-xl border-2 transition-all text-left cursor-pointer ${checkoutType === 'guest'
-                  ? 'border-brand-espresso bg-brand-nude/30'
+                  ? 'border-store-navy bg-store-surface'
                   : 'border-gray-200 hover:border-gray-300'
                   } ${user ? 'opacity-50 cursor-not-allowed' : ''}`}
                 disabled={!!user}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <i className="ri-user-line text-3xl text-brand-espresso"></i>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${checkoutType === 'guest' ? 'border-brand-espresso bg-brand-espresso' : 'border-gray-300'
+                  <i className="ri-user-line text-3xl text-store-ink"></i>
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${checkoutType === 'guest' ? 'border-store-navy bg-store-navy' : 'border-gray-300'
                     }`}>
                     {checkoutType === 'guest' && <i className="ri-check-line text-white text-sm"></i>}
                   </div>
                 </div>
                 <h3 className="text-lg font-bold text-gray-900 mb-2">Guest Checkout</h3>
                 <p className="text-sm text-gray-600">Quick checkout without creating an account</p>
-                {user && <p className="text-xs text-brand-espresso mt-2">You are logged in</p>}
+                {user && <p className="text-xs text-store-muted mt-2">You are logged in</p>}
               </button>
 
               <button
                 onClick={() => setCheckoutType('account')}
                 className={`p-6 rounded-xl border-2 transition-all text-left cursor-pointer ${checkoutType === 'account'
-                  ? 'border-brand-espresso bg-brand-nude/30'
+                  ? 'border-store-navy bg-store-surface'
                   : 'border-gray-200 hover:border-gray-300'
                   }`}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <i className="ri-account-circle-line text-3xl text-brand-espresso"></i>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${checkoutType === 'account' ? 'border-brand-espresso bg-brand-espresso' : 'border-gray-300'
+                  <i className="ri-account-circle-line text-3xl text-store-ink"></i>
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${checkoutType === 'account' ? 'border-store-navy bg-store-navy' : 'border-gray-300'
                     }`}>
                     {checkoutType === 'account' && <i className="ri-check-line text-white text-sm"></i>}
                   </div>
@@ -389,6 +340,70 @@ export default function CheckoutPage() {
                 <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-6">Shipping Information</h2>
 
+                  {user && savedAddresses.length > 0 && (
+                    <div className="mb-6 space-y-2">
+                      <p className="text-sm font-semibold text-gray-900">Saved addresses</p>
+                      <div className="space-y-2">
+                        {savedAddresses.map((addr) => (
+                          <label
+                            key={addr.id}
+                            className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer ${
+                              selectedAddressId === addr.id
+                                ? 'border-store-navy bg-store-surface'
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="saved-address"
+                              checked={selectedAddressId === addr.id}
+                              onChange={() => {
+                                setSelectedAddressId(addr.id);
+                                setShippingData(addressToShippingData(addr, user.email || shippingData.email));
+                                setSaveAddress(false);
+                              }}
+                              className="mt-1"
+                            />
+                            <span className="text-sm">
+                              <span className="font-semibold block">{addr.full_name}</span>
+                              <span className="text-gray-600">
+                                {addr.address_line1}, {addr.city}, {addr.state}
+                              </span>
+                            </span>
+                          </label>
+                        ))}
+                        <label
+                          className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer ${
+                            selectedAddressId === 'new'
+                              ? 'border-store-navy bg-store-surface'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="saved-address"
+                            checked={selectedAddressId === 'new'}
+                            onChange={() => {
+                              setSelectedAddressId('new');
+                              setSaveAddress(true);
+                              setShippingData((prev) => ({
+                                firstName: '',
+                                lastName: '',
+                                email: user.email || prev.email,
+                                phone: '',
+                                address: '',
+                                city: '',
+                                region: '',
+                              }));
+                            }}
+                            className="mt-1"
+                          />
+                          <span className="text-sm font-semibold">Use a new address</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -399,7 +414,7 @@ export default function CheckoutPage() {
                           type="text"
                           value={shippingData.firstName}
                           onChange={(e) => setShippingData({ ...shippingData, firstName: e.target.value })}
-                          className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso ${errors.firstName ? 'border-red-500' : 'border-gray-300'
+                          className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary ${errors.firstName ? 'border-red-500' : 'border-gray-300'
                             }`}
                           placeholder="John"
                         />
@@ -413,7 +428,7 @@ export default function CheckoutPage() {
                           type="text"
                           value={shippingData.lastName}
                           onChange={(e) => setShippingData({ ...shippingData, lastName: e.target.value })}
-                          className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso ${errors.lastName ? 'border-red-500' : 'border-gray-300'
+                          className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary ${errors.lastName ? 'border-red-500' : 'border-gray-300'
                             }`}
                           placeholder="Doe"
                         />
@@ -430,7 +445,7 @@ export default function CheckoutPage() {
                         value={shippingData.email}
                         readOnly={!!user} // Make read-only if logged in (optional, but safer)
                         onChange={(e) => setShippingData({ ...shippingData, email: e.target.value })}
-                        className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso ${errors.email ? 'border-red-500' : 'border-gray-300'
+                        className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary ${errors.email ? 'border-red-500' : 'border-gray-300'
                           } ${user ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         placeholder="you@example.com"
                       />
@@ -445,7 +460,7 @@ export default function CheckoutPage() {
                         type="tel"
                         value={shippingData.phone}
                         onChange={(e) => setShippingData({ ...shippingData, phone: e.target.value })}
-                        className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso ${errors.phone ? 'border-red-500' : 'border-gray-300'
+                        className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary ${errors.phone ? 'border-red-500' : 'border-gray-300'
                           }`}
                         placeholder="+233 XX XXX XXXX"
                       />
@@ -460,7 +475,7 @@ export default function CheckoutPage() {
                         type="text"
                         value={shippingData.address}
                         onChange={(e) => setShippingData({ ...shippingData, address: e.target.value })}
-                        className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso ${errors.address ? 'border-red-500' : 'border-gray-300'
+                        className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary ${errors.address ? 'border-red-500' : 'border-gray-300'
                           }`}
                         placeholder="House number and street name"
                       />
@@ -476,7 +491,7 @@ export default function CheckoutPage() {
                           type="text"
                           value={shippingData.city}
                           onChange={(e) => setShippingData({ ...shippingData, city: e.target.value })}
-                          className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso ${errors.city ? 'border-red-500' : 'border-gray-300'
+                          className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary ${errors.city ? 'border-red-500' : 'border-gray-300'
                             }`}
                           placeholder="Accra"
                         />
@@ -489,7 +504,7 @@ export default function CheckoutPage() {
                         <select
                           value={shippingData.region}
                           onChange={(e) => setShippingData({ ...shippingData, region: e.target.value })}
-                          className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso bg-white ${errors.region ? 'border-red-500' : 'border-gray-300'
+                          className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary bg-white ${errors.region ? 'border-red-500' : 'border-gray-300'
                             }`}
                         >
                           <option value="">Select Region</option>
@@ -507,7 +522,7 @@ export default function CheckoutPage() {
                           type="checkbox"
                           checked={saveAddress}
                           onChange={(e) => setSaveAddress(e.target.checked)}
-                          className="w-5 h-5 text-brand-espresso rounded border-gray-300 focus:ring-brand-mauve/40"
+                          className="w-5 h-5 text-store-ink rounded border-gray-300 focus:ring-store-primary"
                         />
                         <span className="text-sm text-gray-700">Save this address for future orders</span>
                       </label>
@@ -516,7 +531,7 @@ export default function CheckoutPage() {
 
                   <button
                     onClick={handleContinueToDelivery}
-                    className="w-full mt-6 bg-brand-espresso hover:bg-brand-cocoa text-white py-4 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
+                    className="w-full mt-6 bg-store-navy hover:bg-store-navy-light text-white py-4 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
                   >
                     Continue to Delivery
                   </button>
@@ -531,7 +546,7 @@ export default function CheckoutPage() {
                 <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-6">Delivery Method</h2>
                   <div className="space-y-4">
-                    <label className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${deliveryMethod === 'pickup' ? 'border-brand-espresso bg-brand-nude/30' : 'border-gray-300 hover:border-gray-400'
+                    <label className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${deliveryMethod === 'pickup' ? 'border-store-navy bg-store-surface' : 'border-gray-300 hover:border-gray-400'
                       }`}>
                       <div className="flex items-center space-x-4">
                         <input
@@ -540,17 +555,17 @@ export default function CheckoutPage() {
                           value="pickup"
                           checked={deliveryMethod === 'pickup'}
                           onChange={(e) => setDeliveryMethod(e.target.value)}
-                          className="w-5 h-5 text-brand-espresso"
+                          className="w-5 h-5 text-store-ink"
                         />
                         <div>
                           <p className="font-semibold text-gray-900">Store Pickup</p>
-                          <p className="text-sm text-gray-600">Pick up from our store. Ready in 24 hours.</p>
+                          <p className="text-sm text-gray-600">Pick up from our store — Ready in 24 hours</p>
                         </div>
                       </div>
-                      <p className="font-bold text-brand-espresso">FREE</p>
+                      <p className="font-bold text-store-ink">FREE</p>
                     </label>
 
-                    <label className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${deliveryMethod === 'doorstep' ? 'border-brand-espresso bg-brand-nude/30' : 'border-gray-300 hover:border-gray-400'
+                    <label className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${deliveryMethod === 'doorstep' ? 'border-store-navy bg-store-surface' : 'border-gray-300 hover:border-gray-400'
                       }`}>
                       <div className="flex items-center space-x-4">
                         <input
@@ -559,7 +574,7 @@ export default function CheckoutPage() {
                           value="doorstep"
                           checked={deliveryMethod === 'doorstep'}
                           onChange={(e) => setDeliveryMethod(e.target.value)}
-                          className="w-5 h-5 text-brand-espresso"
+                          className="w-5 h-5 text-store-ink"
                         />
                         <div>
                           <p className="font-semibold text-gray-900">Doorstep Delivery</p>
@@ -570,10 +585,10 @@ export default function CheckoutPage() {
                     </label>
 
                     {/* Comprehensive delivery options - to be re-enabled later
-                    <label className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${deliveryMethod === 'accra' ? 'border-brand-espresso bg-brand-nude/30' : 'border-gray-300 hover:border-gray-400'
+                    <label className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${deliveryMethod === 'accra' ? 'border-store-navy bg-store-surface' : 'border-gray-300 hover:border-gray-400'
                       }`}>
                       <div className="flex items-center space-x-4">
-                        <input type="radio" name="delivery" value="accra" checked={deliveryMethod === 'accra'} onChange={(e) => setDeliveryMethod(e.target.value)} className="w-5 h-5 text-brand-espresso" />
+                        <input type="radio" name="delivery" value="accra" checked={deliveryMethod === 'accra'} onChange={(e) => setDeliveryMethod(e.target.value)} className="w-5 h-5 text-store-ink" />
                         <div>
                           <p className="font-semibold text-gray-900">Accra Delivery</p>
                           <p className="text-sm text-gray-600">Delivery within Accra</p>
@@ -581,10 +596,10 @@ export default function CheckoutPage() {
                       </div>
                       <p className="font-bold text-gray-900">GH₵ 40.00</p>
                     </label>
-                    <label className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${deliveryMethod === 'outside-accra' ? 'border-brand-espresso bg-brand-nude/30' : 'border-gray-300 hover:border-gray-400'
+                    <label className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${deliveryMethod === 'outside-accra' ? 'border-store-navy bg-store-surface' : 'border-gray-300 hover:border-gray-400'
                       }`}>
                       <div className="flex items-center space-x-4">
-                        <input type="radio" name="delivery" value="outside-accra" checked={deliveryMethod === 'outside-accra'} onChange={(e) => setDeliveryMethod(e.target.value)} className="w-5 h-5 text-brand-espresso" />
+                        <input type="radio" name="delivery" value="outside-accra" checked={deliveryMethod === 'outside-accra'} onChange={(e) => setDeliveryMethod(e.target.value)} className="w-5 h-5 text-store-ink" />
                         <div>
                           <p className="font-semibold text-gray-900">Outside Accra Delivery</p>
                           <p className="text-sm text-gray-600">Delivery to bus stations (VIP, OA, STC, etc.)</p>
@@ -593,6 +608,64 @@ export default function CheckoutPage() {
                       <p className="font-bold text-gray-900">GH₵ 30.00</p>
                     </label>
                     */}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Payment Amount</h2>
+                  <p className="text-sm text-gray-600 mb-6">
+                    Choose full payment now, or pay half now and the rest before pickup or delivery.
+                  </p>
+                  <div className="space-y-4">
+                    <label
+                      className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                        paymentOption === 'full'
+                          ? 'border-store-navy bg-store-surface'
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-4">
+                        <input
+                          type="radio"
+                          name="paymentOption"
+                          value="full"
+                          checked={paymentOption === 'full'}
+                          onChange={() => setPaymentOption('full')}
+                          className="w-5 h-5 text-store-ink"
+                        />
+                        <div>
+                          <p className="font-semibold text-gray-900">Full Payment</p>
+                          <p className="text-sm text-gray-600">Pay the entire order now</p>
+                        </div>
+                      </div>
+                      <p className="font-bold text-store-ink">GH₵ {total.toFixed(2)}</p>
+                    </label>
+
+                    <label
+                      className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                        paymentOption === 'half'
+                          ? 'border-store-navy bg-store-surface'
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-4">
+                        <input
+                          type="radio"
+                          name="paymentOption"
+                          value="half"
+                          checked={paymentOption === 'half'}
+                          onChange={() => setPaymentOption('half')}
+                          className="w-5 h-5 text-store-ink"
+                        />
+                        <div>
+                          <p className="font-semibold text-gray-900">Half Payment</p>
+                          <p className="text-sm text-gray-600">
+                            Pay 50% now — remaining GH₵ {balanceDue.toFixed(2)} before pickup/delivery
+                          </p>
+                        </div>
+                      </div>
+                      <p className="font-bold text-store-ink">GH₵ {dueNow.toFixed(2)}</p>
+                    </label>
                   </div>
 
                   <div className="flex flex-col-reverse md:flex-row gap-4 mt-6">
@@ -606,7 +679,7 @@ export default function CheckoutPage() {
                     <button
                       onClick={handleContinueToPayment}
                       disabled={isLoading}
-                      className="flex-1 bg-brand-espresso hover:bg-brand-cocoa text-white py-4 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer disabled:opacity-70 flex items-center justify-center"
+                      className="flex-1 bg-store-navy hover:bg-store-navy-light text-white py-4 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer disabled:opacity-70 flex items-center justify-center"
                     >
                       {isLoading ? (
                         <>
@@ -617,7 +690,7 @@ export default function CheckoutPage() {
                           Processing...
                         </>
                       ) : (
-                        'Pay with Mobile Money'
+                        `Pay GH₵ ${dueNow.toFixed(2)} with Mobile Money`
                       )}
                     </button>
                   </div>
@@ -637,6 +710,9 @@ export default function CheckoutPage() {
               shipping={shippingCost}
               tax={tax}
               total={total}
+              dueNow={dueNow}
+              balanceDue={paymentOption === 'half' ? balanceDue : 0}
+              paymentOption={paymentOption}
             />
           </div>
         </div>

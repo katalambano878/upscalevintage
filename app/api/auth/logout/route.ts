@@ -1,0 +1,10 @@
+import { ok, route } from '@/lib/api';
+import { destroySession } from '@/lib/auth';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export const POST = route(async () => {
+    await destroySession();
+    return ok({ signedOut: true });
+});

@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { asNumber, money } from '@/lib/format-money';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function AdminDashboard() {
   const [dateRange, setDateRange] = useState('7days'); // logic not implemented for this demo, just UI
   const [loading, setLoading] = useState(true);
+  const [hasMounted, setHasMounted] = useState(false);
 
   // Real Stats
   const [stats, setStats] = useState([
@@ -17,7 +19,7 @@ export default function AdminDashboard() {
       change: '0%', // Placeholder trend
       trend: 'up',
       icon: 'ri-money-dollar-circle-line',
-      color: 'espresso'
+      color: 'blue'
     },
     {
       title: 'Orders',
@@ -25,15 +27,15 @@ export default function AdminDashboard() {
       change: '0%',
       trend: 'up',
       icon: 'ri-shopping-bag-line',
-      color: 'champagne'
+      color: 'blue'
     },
     {
-      title: 'Customers',
+      title: 'Customers', // This is total active users for us currently
       value: '0',
       change: '0%',
       trend: 'up',
       icon: 'ri-group-line',
-      color: 'mauve'
+      color: 'purple'
     },
     {
       title: 'Avg Order Value',
@@ -41,7 +43,7 @@ export default function AdminDashboard() {
       change: '0%',
       trend: 'up',
       icon: 'ri-line-chart-line',
-      color: 'nude'
+      color: 'amber'
     }
   ]);
 
@@ -54,25 +56,15 @@ export default function AdminDashboard() {
     async function fetchDashboardData() {
       try {
         // 1. Fetch ALL Orders for count & customers
-        const { data: allOrdersData, error: ordersError } = await supabase
-          .from('orders')
-          .select('total, status, payment_status, created_at, email');
+        const allOrdersData = await apiData<any[]>('/api/orders');
 
-        if (ordersError) throw ordersError;
-
-        // Only count PAID orders for revenue & avg order value
-        const paidOrders = allOrdersData?.filter(o => o.payment_status === 'paid') || [];
-        const totalRevenue = paidOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+        const paidOrders = allOrdersData?.filter((o) => o.payment_status === 'paid') || [];
+        const totalRevenue = paidOrders.reduce((sum, order) => sum + asNumber(order.total), 0);
         const totalOrders = allOrdersData?.length || 0;
         const paidOrderCount = paidOrders.length;
         const avgOrderValue = paidOrderCount > 0 ? totalRevenue / paidOrderCount : 0;
 
-        // 2. Fetch Customers Count (approximation using orders unique emails if we don't have user metrics access)
-        // Since we can't query auth.users directly from client, we'll estimate active customers via orders or just keep it 0 if we can't.
-        // Actually, best to just show "Orders" or "Recent Signups" if we had a public profiles table.
-        // We'll use unique emails from orders as a proxy for "Customers"
-        const uniqueCustomers = new Set(allOrdersData?.map(o => o.email)).size;
-
+        const uniqueCustomers = new Set(allOrdersData?.map((o) => o.email)).size;
 
         // Process Chart Data (Last 7 Days) - only count PAID orders as revenue
         const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -89,7 +81,7 @@ export default function AdminDashboard() {
         paidOrders.forEach(order => {
           const date = new Date(order.created_at).toISOString().split('T')[0];
           if (chartMap[date] !== undefined) {
-            chartMap[date] += (order.total || 0);
+            chartMap[date] += asNumber(order.total);
           }
         });
 
@@ -102,7 +94,7 @@ export default function AdminDashboard() {
         setStats([
           {
             title: 'Total Revenue',
-            value: `GH₵ ${totalRevenue.toFixed(2)}`,
+            value: `GH₵ ${money(totalRevenue)}`,
             change: '+0%', // Dynamic change requires date filtering logic which is complex
             trend: 'up',
             icon: 'ri-money-dollar-circle-line',
@@ -126,7 +118,7 @@ export default function AdminDashboard() {
           },
           {
             title: 'Avg Order Value',
-            value: `GH₵ ${avgOrderValue.toFixed(2)}`,
+            value: `GH₵ ${money(avgOrderValue)}`,
             change: '+0%',
             trend: 'up',
             icon: 'ri-line-chart-line',
@@ -134,15 +126,12 @@ export default function AdminDashboard() {
           }
         ]);
 
-        // 3. Fetch Recent Orders (only paid orders)
-        const { data: recentOrdersData } = await supabase
-          .from('orders')
-          .select('id, order_number, user_id, email, created_at, total, status, shipping_address')
-          .eq('payment_status', 'paid')
-          .order('created_at', { ascending: false })
-          .limit(5);
+        const recentOrdersData = [...(allOrdersData || [])]
+          .filter((o) => o.payment_status === 'paid')
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 5);
 
-        if (recentOrdersData) {
+        if (recentOrdersData.length) {
           const formattedRecent = recentOrdersData.map((o: any) => {
             const addr = o.shipping_address || {};
             const customerName = (addr.firstName && addr.lastName)
@@ -154,7 +143,7 @@ export default function AdminDashboard() {
               customer: customerName,
               email: o.email,
               date: new Date(o.created_at).toLocaleDateString(),
-              total: o.total,
+              total: asNumber(o.total),
               status: o.status,
               items: 1
             };
@@ -162,14 +151,10 @@ export default function AdminDashboard() {
           setRecentOrders(formattedRecent);
         }
 
-        // 4. Fetch Low Stock Products
-        const { data: lowStockData } = await supabase
-          .from('products')
-          .select('name, quantity')
-          .lt('quantity', 10)
-          .limit(5);
+        const catalogProducts = await apiData<any[]>('/api/catalog/products?status=active');
+        const lowStockData = catalogProducts.filter((p) => (p.quantity ?? 0) < 10).slice(0, 5);
 
-        if (lowStockData) {
+        if (lowStockData.length) {
           setLowStockProducts(lowStockData.map((p: any) => ({
             name: p.name,
             stock: p.quantity,
@@ -177,15 +162,12 @@ export default function AdminDashboard() {
           })));
         }
 
-        // 5. Fetch Top Products (Approximation: High Price or just Random for now, 
-        // real top selling requires aggregation on order_items which is complex for client-side)
-        // real top selling requires aggregation on order_items which is complex for client-side)
-        const { data: productData } = await supabase.from('products').select('*, product_images(url)').limit(4);
-        if (productData) {
+        const productData = catalogProducts.slice(0, 4);
+        if (productData.length) {
           setTopProducts(productData.map((p: any) => ({
             id: p.slug, // Use slug for link
             name: p.name,
-            image: p.product_images?.[0]?.url || 'https://via.placeholder.com/200',
+            image: p.product_images?.[0]?.url || '/logo.png',
             sales: 0, // Mocked for now
             revenue: 0, // Mocked for now
             stock: p.quantity
@@ -202,11 +184,16 @@ export default function AdminDashboard() {
     fetchDashboardData();
   }, []);
 
+  // Avoid hydration mismatches for charting library by only rendering it on client
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
   const statusColors: any = {
     'pending': 'bg-amber-100 text-amber-700',
-    'processing': 'bg-brand-nude text-brand-espresso',
-    'shipped': 'bg-brand-mauve/20 text-brand-mauve',
-    'delivered': 'bg-brand-champagne/30 text-brand-espresso',
+    'processing': 'bg-store-surface text-store-ink',
+    'shipped': 'bg-store-primary/15 text-store-primary',
+    'delivered': 'bg-store-surface text-store-ink',
     'cancelled': 'bg-red-100 text-red-700'
   };
 
@@ -229,51 +216,44 @@ export default function AdminDashboard() {
     // ... reduced list for brevity or keep all if desired
   ];
 
-  const statIconStyles: Record<string, string> = {
-    espresso: 'bg-brand-espresso/10 text-brand-espresso',
-    champagne: 'bg-brand-champagne/25 text-brand-espresso',
-    mauve: 'bg-brand-mauve/20 text-brand-mauve',
-    nude: 'bg-brand-nude text-brand-cocoa',
-  };
-
   if (loading) {
-    return <div className="p-8 text-center text-brand-cocoa/70">Loading dashboard…</div>;
+    return <div className="p-8 text-center text-gray-500">Loading Dashboard...</div>;
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="font-display text-3xl font-semibold text-brand-espresso">Dashboard</h1>
-            <p className="text-brand-cocoa/80 mt-1">Welcome back! Here&apos;s what&apos;s happening with your store.</p>
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-gray-600 mt-1">Welcome back! Here's what's happening with your store.</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {stats.map((stat) => (
-            <div key={stat.title} className="bg-white rounded-xl shadow-sm border border-brand-nude p-6 hover:shadow-luxury transition-shadow">
+            <div key={stat.title} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 flex items-center justify-center rounded-lg ${statIconStyles[stat.color] || statIconStyles.espresso}`}>
+                <div className={`w-12 h-12 flex items-center justify-center bg-${stat.color}-100 text-${stat.color}-700 rounded-lg`}>
                   <i className={`${stat.icon} text-2xl`}></i>
                 </div>
-                <span className="text-sm font-semibold text-brand-champagne">
+                <span className={`text-sm font-semibold text-store-ink`}>
                   {stat.change}
                 </span>
               </div>
-              <h3 className="text-2xl font-bold text-brand-espresso mb-1">{stat.value}</h3>
-              <p className="text-brand-cocoa/70 text-sm">{stat.title}</p>
+              <h3 className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</h3>
+              <p className="text-gray-600 text-sm">{stat.title}</p>
             </div>
           ))}
         </div>
 
         {/* Revenue Chart & Quick Actions */}
         <div className="grid lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-brand-nude">
+          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-brand-espresso">Revenue Trend</h2>
+              <h2 className="text-xl font-bold text-gray-900">Revenue Trend</h2>
               <select
-                className="bg-brand-cream border border-brand-nude text-brand-cocoa text-sm rounded-lg focus:ring-brand-champagne/50 focus:border-brand-espresso block p-2"
+                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-store-primary focus:border-store-primary block p-2"
                 value={dateRange}
                 onChange={(e) => setDateRange(e.target.value)}
               >
@@ -282,51 +262,53 @@ export default function AdminDashboard() {
               </select>
             </div>
             <div className="h-80 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#C8A46A" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#C8A46A" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(value) => `GH₵${value}`} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value) => [`GH₵${(value as number)?.toFixed(2) ?? '0.00'}`, 'Revenue']}
-                  />
-                  <Area type="monotone" dataKey="revenue" stroke="#3B241D" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              {hasMounted && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(value) => `GH₵${value}`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      formatter={(value) => [`GH₵${money(value)}`, 'Revenue']}
+                    />
+                    <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
             <div className="space-y-3">
-              <Link href="/admin/products/new" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-brand-nude/50 text-brand-cocoa hover:text-brand-espresso rounded-lg transition-colors group">
+              <Link href="/admin/products/new" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-store-surface text-gray-700 hover:text-store-ink rounded-lg transition-colors group">
                 <div className="flex items-center font-medium">
-                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-brand-nude transition-colors shadow-sm">
+                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-store-surface transition-colors shadow-sm">
                     <i className="ri-add-line"></i>
                   </span>
                   Add Product
                 </div>
                 <i className="ri-arrow-right-line"></i>
               </Link>
-              <Link href="/admin/pos" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-brand-nude/50 text-brand-cocoa hover:text-brand-espresso rounded-lg transition-colors group">
+              <Link href="/admin/pos" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-store-surface text-gray-700 hover:text-store-ink rounded-lg transition-colors group">
                 <div className="flex items-center font-medium">
-                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-brand-nude transition-colors shadow-sm">
+                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-store-surface transition-colors shadow-sm">
                     <i className="ri-computer-line"></i>
                   </span>
                   Open POS
                 </div>
                 <i className="ri-arrow-right-line"></i>
               </Link>
-              <Link href="/admin/orders" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-brand-nude/50 text-brand-cocoa hover:text-brand-espresso rounded-lg transition-colors group">
+              <Link href="/admin/orders" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-store-surface text-gray-700 hover:text-store-ink rounded-lg transition-colors group">
                 <div className="flex items-center font-medium">
-                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-brand-nude transition-colors shadow-sm">
+                  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-3 group-hover:bg-store-surface transition-colors shadow-sm">
                     <i className="ri-file-list-line"></i>
                   </span>
                   Manage Orders
@@ -341,7 +323,7 @@ export default function AdminDashboard() {
           <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">Recent Orders</h2>
-              <Link href="/admin/orders" className="text-brand-espresso hover:text-brand-cocoa font-medium text-sm whitespace-nowrap cursor-pointer">
+              <Link href="/admin/orders" className="text-store-ink hover:text-store-ink font-medium text-sm whitespace-nowrap cursor-pointer">
                 View All <i className="ri-arrow-right-line ml-1"></i>
               </Link>
             </div>
@@ -364,7 +346,7 @@ export default function AdminDashboard() {
                     {recentOrders.map((order) => (
                       <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                         <td className="py-4 px-4">
-                          <Link href={`/admin/orders/${order.id}`} className="text-brand-espresso hover:text-brand-cocoa font-medium whitespace-nowrap cursor-pointer">
+                          <Link href={`/admin/orders/${order.id}`} className="text-store-ink hover:text-store-ink font-medium whitespace-nowrap cursor-pointer">
                             {order.displayId}
                           </Link>
                         </td>
@@ -373,7 +355,7 @@ export default function AdminDashboard() {
                           <p className="text-sm text-gray-500">{order.email}</p>
                         </td>
                         <td className="py-4 px-4 text-gray-700 whitespace-nowrap">{order.date}</td>
-                        <td className="py-4 px-4 font-semibold text-gray-900 whitespace-nowrap">GH₵ {order.total.toFixed(2)}</td>
+                        <td className="py-4 px-4 font-semibold text-gray-900 whitespace-nowrap">GH₵ {money(order.total)}</td>
                         <td className="py-4 px-4">
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${statusColors[order.status] || 'bg-gray-100'}`}>
                             {order.status === 'shipped' ? 'Packaged' : order.status.charAt(0).toUpperCase() + order.status.slice(1)}
@@ -408,7 +390,7 @@ export default function AdminDashboard() {
                   ))}
                 </div>
               )}
-              <Link href="/admin/products?filter=low-stock" className="block text-center mt-4 text-brand-espresso hover:text-brand-cocoa font-medium text-sm whitespace-nowrap cursor-pointer">
+              <Link href="/admin/products?filter=low-stock" className="block text-center mt-4 text-store-ink hover:text-store-ink font-medium text-sm whitespace-nowrap cursor-pointer">
                 View All Products <i className="ri-arrow-right-line ml-1"></i>
               </Link>
             </div>
@@ -418,7 +400,7 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 overflow-hidden">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900">Products</h2>
-            <Link href="/admin/products" className="text-brand-espresso hover:text-brand-cocoa font-medium text-sm whitespace-nowrap cursor-pointer">
+            <Link href="/admin/products" className="text-store-ink hover:text-store-ink font-medium text-sm whitespace-nowrap cursor-pointer">
               View All <i className="ri-arrow-right-line ml-1"></i>
             </Link>
           </div>
@@ -432,7 +414,7 @@ export default function AdminDashboard() {
                 <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{product.name}</h3>
                 <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
                   <span className="text-sm text-gray-600">Stock: {product.stock}</span>
-                  <Link href={`/admin/products/${product.id}`} className="text-brand-espresso hover:text-brand-cocoa text-sm font-medium whitespace-nowrap cursor-pointer">
+                  <Link href={`/admin/products/${product.id}`} className="text-store-ink hover:text-store-ink text-sm font-medium whitespace-nowrap cursor-pointer">
                     Edit <i className="ri-arrow-right-line ml-1"></i>
                   </Link>
                 </div>

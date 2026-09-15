@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
 
 function OrderTrackingContent() {
   const searchParams = useSearchParams();
@@ -32,52 +32,17 @@ function OrderTrackingContent() {
     setError('');
 
     try {
-      // Only select the fields we need — avoid exposing unnecessary data
-      const { data, error: fetchError } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          order_number,
-          status,
-          payment_status,
-          total,
-          email,
-          created_at,
-          shipping_address,
-          metadata,
-          order_items (
-            id,
-            product_name,
-            variant_name,
-            quantity,
-            unit_price,
-            metadata,
-            products (
-              product_images (url)
-            )
-          )
-        `)
-        .eq('order_number', orderNum)
-        .single();
-
-      if (fetchError || !data) {
-        setError('Order not found. Please check your order number and try again.');
-        setIsTracking(false);
-        return;
-      }
-
-      // SECURITY: Always verify email matches — this is mandatory
-      if (data.email?.toLowerCase() !== emailToVerify.toLowerCase()) {
-        setError('The email address does not match this order. Please use the email you placed the order with.');
-        setIsTracking(false);
-        return;
-      }
+      const data = await api<Record<string, unknown>>('/api/orders/track', {
+        method: 'POST',
+        json: { email: emailToVerify, order_number: orderNum },
+      });
 
       setOrder(data);
       setIsTracking(true);
     } catch (err) {
       console.error('Error fetching order:', err);
-      setError('Something went wrong. Please try again.');
+      setError('Order not found or email does not match. Please check your details and try again.');
+      setIsTracking(false);
     } finally {
       setLoading(false);
     }
@@ -172,9 +137,9 @@ function OrderTrackingContent() {
     
     const statusMap: Record<string, { label: string; color: string }> = {
       'pending': { label: 'Pending', color: 'bg-amber-100 text-amber-800' },
-      'processing': { label: 'Processing', color: 'bg-brand-nude/50 text-brand-cocoa' },
-      'shipped': { label: 'Packaged', color: 'bg-purple-100 text-purple-800' },
-      'delivered': { label: 'Delivered', color: 'bg-brand-nude/50 text-brand-cocoa' },
+      'processing': { label: 'Processing', color: 'bg-store-surface text-store-ink' },
+      'shipped': { label: 'Packaged', color: 'bg-store-primary/15 text-store-ink' },
+      'delivered': { label: 'Delivered', color: 'bg-store-surface text-store-ink' },
       'cancelled': { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
     };
 
@@ -201,7 +166,7 @@ function OrderTrackingContent() {
                   type="text"
                   value={orderNumber}
                   onChange={(e) => setOrderNumber(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary"
                   placeholder="e.g. ORD-1770328211911-915 or SLI-ABC123"
                 />
               </div>
@@ -214,7 +179,7 @@ function OrderTrackingContent() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary"
                   placeholder="you@example.com"
                 />
               </div>
@@ -228,7 +193,7 @@ function OrderTrackingContent() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-brand-espresso hover:bg-brand-cocoa text-white py-4 rounded-lg font-semibold transition-colors whitespace-nowrap disabled:opacity-50"
+                className="w-full bg-store-navy hover:bg-store-navy-light text-white py-4 rounded-lg font-semibold transition-colors whitespace-nowrap disabled:opacity-50"
               >
                 {loading ? (
                   <span className="flex items-center justify-center">
@@ -239,12 +204,12 @@ function OrderTrackingContent() {
               </button>
             </form>
 
-            <div className="mt-8 p-4 bg-brand-nude/30 border border-brand-nude/70 rounded-lg">
+            <div className="mt-8 p-4 bg-store-surface border border-gray-200 rounded-lg">
               <div className="flex items-start space-x-3">
-                <i className="ri-information-line text-xl text-brand-espresso mt-0.5"></i>
+                <i className="ri-information-line text-xl text-store-ink mt-0.5"></i>
                 <div>
-                  <p className="text-sm font-semibold text-brand-cocoa">Need Help?</p>
-                  <p className="text-sm text-brand-espresso mt-1">
+                  <p className="text-sm font-semibold text-store-ink">Need Help?</p>
+                  <p className="text-sm text-store-ink mt-1">
                     You can find your order number and tracking number in the SMS or email we sent you after your order was confirmed.
                   </p>
                 </div>
@@ -304,8 +269,8 @@ function OrderTrackingContent() {
           <div className="grid md:grid-cols-3 gap-6 mb-8">
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 flex items-center justify-center bg-brand-nude/50 rounded-full">
-                  <i className="ri-map-pin-line text-xl text-brand-espresso"></i>
+                <div className="w-10 h-10 flex items-center justify-center bg-store-surface rounded-full">
+                  <i className="ri-map-pin-line text-xl text-store-ink"></i>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Shipping To</p>
@@ -318,8 +283,8 @@ function OrderTrackingContent() {
 
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 flex items-center justify-center bg-brand-nude/50 rounded-full">
-                  <i className="ri-money-cny-circle-line text-xl text-brand-espresso"></i>
+                <div className="w-10 h-10 flex items-center justify-center bg-store-surface rounded-full">
+                  <i className="ri-money-cny-circle-line text-xl text-store-ink"></i>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Total</p>
@@ -330,8 +295,8 @@ function OrderTrackingContent() {
 
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 flex items-center justify-center bg-brand-nude/50 rounded-full">
-                  <i className="ri-box-3-line text-xl text-brand-espresso"></i>
+                <div className="w-10 h-10 flex items-center justify-center bg-store-surface rounded-full">
+                  <i className="ri-box-3-line text-xl text-store-ink"></i>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Items</p>
@@ -350,16 +315,16 @@ function OrderTrackingContent() {
                 <div className="relative flex flex-col items-center mr-6">
                   <div className={`w-12 h-12 flex items-center justify-center rounded-full font-bold transition-colors ${
                     step.status === 'completed'
-                      ? 'bg-brand-espresso text-white'
+                      ? 'bg-store-navy text-white'
                       : step.status === 'active'
-                      ? 'bg-brand-nude/50 text-brand-espresso ring-4 ring-brand-mauve/30'
+                      ? 'bg-store-surface text-store-ink ring-4 ring-store-primary/20'
                       : 'bg-gray-200 text-gray-500'
                   }`}>
                     <i className={`${step.icon} text-xl`}></i>
                   </div>
                   {index < trackingSteps.length - 1 && (
                     <div className={`w-0.5 h-16 mt-2 ${
-                      step.status === 'completed' ? 'bg-brand-espresso' : 'bg-gray-200'
+                      step.status === 'completed' ? 'bg-store-navy' : 'bg-gray-200'
                     }`}></div>
                   )}
                 </div>
@@ -375,7 +340,7 @@ function OrderTrackingContent() {
                     {step.description}
                   </p>
                   <p className={`text-sm mt-1 font-semibold ${
-                    step.status === 'pending' ? 'text-gray-400' : 'text-brand-espresso'
+                    step.status === 'pending' ? 'text-gray-400' : 'text-store-ink'
                   }`}>
                     {step.date}
                   </p>
@@ -411,7 +376,7 @@ function OrderTrackingContent() {
                     <p className="text-xs text-gray-500">{item.variant_name}</p>
                   )}
                 </div>
-                <p className="font-bold text-brand-espresso">GH₵ {Number(item.unit_price).toFixed(2)}</p>
+                <p className="font-bold text-store-ink">GH₵ {Number(item.unit_price).toFixed(2)}</p>
               </div>
             ))}
           </div>
@@ -420,11 +385,11 @@ function OrderTrackingContent() {
         <div className="mt-8 text-center">
           <p className="text-gray-600 mb-4">Need help with your order?</p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Link href="/contact" className="text-brand-espresso hover:text-brand-espresso font-semibold whitespace-nowrap">
+            <Link href="/contact" className="text-store-ink hover:text-store-ink font-semibold whitespace-nowrap">
               <i className="ri-customer-service-line mr-1"></i>
               Contact Support
             </Link>
-            <Link href="/returns" className="text-brand-espresso hover:text-brand-espresso font-semibold whitespace-nowrap">
+            <Link href="/returns" className="text-store-ink hover:text-store-ink font-semibold whitespace-nowrap">
               <i className="ri-arrow-left-right-line mr-1"></i>
               Returns Policy
             </Link>
@@ -440,7 +405,7 @@ export default function OrderTrackingPage() {
     <Suspense fallback={
       <main className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-brand-espresso border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-12 h-12 border-4 border-store-navy border-t-transparent rounded-full animate-spin mx-auto"></div>
         </div>
       </main>
     }>

@@ -17,7 +17,8 @@
  * that is what the existing /api/payment/moolre route uses.
  */
 
-import { supabaseAdmin } from './supabase-admin';
+import { query, queryOne, transaction } from './db';
+import { trackOrder as fetchTrackedOrder } from '@/lib/data/orders';
 import {
     BRAND_NAME,
     TAGLINE,
@@ -150,24 +151,24 @@ export interface CatalogSummaryItem {
  * answers about "what do you sell?" / "do you carry X?" in the real catalog
  * rather than guessing from the brand description.
  */
-export async function getStoreCategories(supabase: any): Promise<StoreCategory[]> {
-    const { data, error } = await supabase
-        .from('categories')
-        .select('id, name, slug, description')
-        .eq('status', 'active')
-        .order('position', { ascending: true, nullsFirst: false })
-        .order('name', { ascending: true });
-
-    if (error) {
+export async function getStoreCategories(_supabase?: unknown): Promise<StoreCategory[]> {
+    try {
+        const rows = await query<{ id: string; name: string; slug: string; description: string | null }>(
+            `SELECT id, name, slug, description
+               FROM categories
+              WHERE status = 'active'
+              ORDER BY position ASC NULLS LAST, name ASC`
+        );
+        return rows.map((c) => ({
+            id: c.id,
+            name: c.name,
+            slug: c.slug,
+            description: c.description || null,
+        }));
+    } catch (error) {
         console.error('[ChatTools] getStoreCategories error:', error);
         return [];
     }
-    return (data || []).map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        slug: c.slug,
-        description: c.description || null,
-    }));
 }
 
 /**
@@ -177,33 +178,38 @@ export async function getStoreCategories(supabase: any): Promise<StoreCategory[]
  * available without triggering a full search_products tool call for every
  * yes/no question.
  */
-export async function getStoreCatalogSummary(supabase: any, limit = 60): Promise<CatalogSummaryItem[]> {
-    const { data, error } = await supabase
-        .from('products')
-        .select(`
-            name, slug, price, quantity,
-            category:categories (name, slug)
-        `)
-        .eq('status', 'active')
-        .order('rating_avg', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-    if (error) {
-        console.error('[ChatTools] getStoreCatalogSummary error:', error);
-        return [];
-    }
-    return (data || []).map((p: any) => {
-        const cat = Array.isArray(p.category) ? p.category[0] : p.category;
-        return {
+export async function getStoreCatalogSummary(_supabase?: unknown, limit = 60): Promise<CatalogSummaryItem[]> {
+    try {
+        const rows = await query<{
+            name: string;
+            slug: string;
+            price: number;
+            quantity: number;
+            category: { name: string; slug: string } | null;
+        }>(
+            `SELECT p.name, p.slug, p.price, p.quantity,
+                    CASE WHEN c.id IS NULL THEN NULL
+                         ELSE jsonb_build_object('name', c.name, 'slug', c.slug)
+                    END AS category
+               FROM products p
+               LEFT JOIN categories c ON c.id = p.category_id
+              WHERE p.status = 'active'
+              ORDER BY p.rating_avg DESC NULLS LAST, p.created_at DESC
+              LIMIT $1`,
+            [limit]
+        );
+        return rows.map((p) => ({
             name: p.name,
             slug: p.slug,
             price: Number(p.price) || 0,
             inStock: (p.quantity ?? 0) > 0,
-            categoryName: cat?.name ?? null,
-            categorySlug: cat?.slug ?? null,
-        };
-    });
+            categoryName: p.category?.name ?? null,
+            categorySlug: p.category?.slug ?? null,
+        }));
+    } catch (error) {
+        console.error('[ChatTools] getStoreCatalogSummary error:', error);
+        return [];
+    }
 }
 
 /**
@@ -259,50 +265,49 @@ function mapProduct(p: any): ChatProduct {
 
 // ─── 1. Search Products ─────────────────────────────────────────────────────
 
-export async function searchProducts(supabase: any, query: string, limit = 4): Promise<ChatProduct[]> {
-    const term = (query || '').trim();
+async function loadActiveProducts(whereSql: string, params: unknown[], limit: number): Promise<ChatProduct[]> {
+    const rows = await query<Record<string, unknown>>(
+        `SELECT p.id, p.name, p.slug, p.status, p.description, p.price, p.compare_at_price, p.quantity, p.moq,
+                COALESCE((
+                  SELECT jsonb_agg(jsonb_build_object('id', v.id, 'name', v.name, 'price', v.price, 'compare_at_price', v.compare_at_price, 'quantity', v.quantity))
+                  FROM product_variants v WHERE v.product_id = p.id
+                ), '[]'::jsonb) AS product_variants,
+                COALESCE((
+                  SELECT jsonb_agg(jsonb_build_object('url', i.url, 'position', i.position) ORDER BY i.position)
+                  FROM product_images i WHERE i.product_id = p.id
+                ), '[]'::jsonb) AS product_images
+           FROM products p
+          WHERE p.status = 'active' AND ${whereSql}
+          ORDER BY p.rating_avg DESC NULLS LAST
+          LIMIT $${params.length + 1}`,
+        [...params, limit]
+    );
+    return rows.map((p) => mapProduct(p));
+}
+
+export async function searchProducts(_supabase: unknown, searchQuery: string, limit = 4): Promise<ChatProduct[]> {
+    const term = (searchQuery || '').trim();
     if (!term) return [];
 
-    // 1) Exact phrase match against name / description / brand / tags
-    const phraseFilter = `name.ilike.%${term}%,description.ilike.%${term}%,brand.ilike.%${term}%`;
-    const { data, error } = await supabase
-        .from('products')
-        .select(PRODUCT_SELECT)
-        .eq('status', 'active')
-        .or(phraseFilter)
-        .order('rating_avg', { ascending: false })
-        .limit(limit);
+    const phrase = `%${term}%`;
+    let found = await loadActiveProducts(
+        `(p.name ILIKE $1 OR p.description ILIKE $1 OR COALESCE(p.brand, '') ILIKE $1)`,
+        [phrase],
+        limit
+    );
+    if (found.length) return found;
 
-    if (error) {
-        console.error('[ChatTools] searchProducts error:', error);
-        return [];
-    }
-
-    if (data && data.length > 0) {
-        return data.map((p: any) => mapProduct(p));
-    }
-
-    // 2) Individual keywords (handles "blue silk shirt" by trying each word).
-    // Also tries each word's singular/plural variants so "cars" matches a
-    // product description containing "car".
     const words = expandStems(term.toLowerCase().split(/\s+/));
     for (const word of words) {
-        const { data: wordData } = await supabase
-            .from('products')
-            .select(PRODUCT_SELECT)
-            .eq('status', 'active')
-            .or(`name.ilike.%${word}%,description.ilike.%${word}%,brand.ilike.%${word}%`)
-            .order('rating_avg', { ascending: false })
-            .limit(limit);
-        if (wordData && wordData.length > 0) {
-            return wordData.map((p: any) => mapProduct(p));
-        }
+        const w = `%${word}%`;
+        found = await loadActiveProducts(
+            `(p.name ILIKE $1 OR p.description ILIKE $1 OR COALESCE(p.brand, '') ILIKE $1)`,
+            [w],
+            limit
+        );
+        if (found.length) return found;
     }
 
-    // 3) Category name match (e.g. "bags", "fashion", "car", "cars"). Try the
-    // term as-is first, then the singular form, then each individual word
-    // (also stemmed). This means "do you sell cars" → "cars" → "car" → match
-    // against "Imported Car Deals".
     const candidates = uniqueStrings([
         term,
         term.replace(/s$/i, ''),
@@ -311,25 +316,13 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
     ]);
 
     for (const candidate of candidates) {
-        const { data: catMatch } = await supabase
-            .from('categories')
-            .select('id')
-            .eq('status', 'active')
-            .ilike('name', `%${candidate}%`)
-            .limit(1);
-
-        if (catMatch && catMatch.length > 0) {
-            const { data: catProducts } = await supabase
-                .from('products')
-                .select(PRODUCT_SELECT)
-                .eq('status', 'active')
-                .eq('category_id', catMatch[0].id)
-                .order('rating_avg', { ascending: false })
-                .limit(limit);
-            if (catProducts && catProducts.length > 0) {
-                return catProducts.map((p: any) => mapProduct(p));
-            }
-        }
+        const cat = await queryOne<{ id: string }>(
+            `SELECT id FROM categories WHERE status = 'active' AND name ILIKE $1 LIMIT 1`,
+            [`%${candidate}%`]
+        );
+        if (!cat) continue;
+        found = await loadActiveProducts(`p.category_id = $1::uuid`, [cat.id], limit);
+        if (found.length) return found;
     }
 
     return [];
@@ -337,75 +330,53 @@ export async function searchProducts(supabase: any, query: string, limit = 4): P
 
 // ─── 2. Get Product for Cart ────────────────────────────────────────────────
 
-export async function getProductForCart(supabase: any, slugOrId: string): Promise<ChatProduct | null> {
+export async function getProductForCart(_supabase: unknown, slugOrId: string): Promise<ChatProduct | null> {
     if (!slugOrId?.trim()) return null;
     const trimmed = slugOrId.trim();
-    const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
-
-    const q = supabase.from('products').select(PRODUCT_SELECT).eq('status', 'active');
-    const { data, error } = isId
-        ? await q.eq('id', trimmed).maybeSingle()
-        : await q.eq('slug', trimmed).maybeSingle();
-    if (error || !data) return null;
-    return mapProduct(data);
+    const row = await queryOne<Record<string, unknown>>(
+        `SELECT p.id, p.name, p.slug, p.status, p.description, p.price, p.compare_at_price, p.quantity, p.moq,
+                COALESCE((
+                  SELECT jsonb_agg(jsonb_build_object('id', v.id, 'name', v.name, 'price', v.price, 'compare_at_price', v.compare_at_price, 'quantity', v.quantity))
+                  FROM product_variants v WHERE v.product_id = p.id
+                ), '[]'::jsonb) AS product_variants,
+                COALESCE((
+                  SELECT jsonb_agg(jsonb_build_object('url', i.url, 'position', i.position) ORDER BY i.position)
+                  FROM product_images i WHERE i.product_id = p.id
+                ), '[]'::jsonb) AS product_images
+           FROM products p
+          WHERE p.status = 'active'
+            AND (p.id::text = $1 OR p.slug = $1)
+          LIMIT 1`,
+        [trimmed]
+    );
+    if (!row) return null;
+    return mapProduct(row);
 }
 
 // ─── 3. Track Order ─────────────────────────────────────────────────────────
 
-export async function trackOrder(supabase: any, orderNumber: string, email: string): Promise<ChatOrder | null> {
+export async function trackOrder(_supabase: unknown, orderNumber: string, email: string): Promise<ChatOrder | null> {
     if (!orderNumber?.trim() || !email?.trim()) return null;
     const num = orderNumber.trim();
     const emailLower = email.trim().toLowerCase();
 
-    const select = `
-    id, order_number, status, payment_status, total, created_at, email, user_id,
-    metadata,
-    order_items(product_name, quantity, unit_price, total_price)
-  `;
+    const row = await fetchTrackedOrder(emailLower, num);
+    if (!row) return null;
 
-    let { data: row, error } = await supabase
-        .from('orders')
-        .select(select)
-        .eq('order_number', num)
-        .maybeSingle();
-
-    if (!row && /^[0-9a-f-]{36}$/i.test(num)) {
-        const r2 = await supabase.from('orders').select(select).eq('id', num).maybeSingle();
-        row = r2.data;
-        error = r2.error;
-    }
-
-    if (error || !row) return null;
-
-    // SECURITY: always verify the requester knows the order's email.
-    const orderEmail = (row.email || '').toLowerCase();
-    let emailMatches = !!orderEmail && orderEmail === emailLower;
-
-    if (!emailMatches && row.user_id) {
-        // For logged-in customers the email column may differ from the profile
-        // email. Fall back to the profile.
-        const { data: ownerProfile } = await supabase
-            .from('profiles')
-            .select('email')
-            .eq('id', row.user_id)
-            .maybeSingle();
-        const ownerEmail = (ownerProfile?.email || '').toLowerCase();
-        emailMatches = !!ownerEmail && ownerEmail === emailLower;
-    }
-
-    if (!emailMatches) return null;
+    const meta = (row.metadata || {}) as Record<string, unknown>;
+    const items = (row.order_items || []) as Array<Record<string, unknown>>;
 
     return {
-        id: row.id,
-        order_number: row.order_number,
-        status: row.status,
-        payment_status: row.payment_status || 'pending',
+        id: String(row.id),
+        order_number: String(row.order_number),
+        status: String(row.status),
+        payment_status: String(row.payment_status || 'pending'),
         total: Number(row.total) || 0,
-        created_at: row.created_at,
-        tracking_number: (row.metadata as any)?.tracking_number || undefined,
-        items: (row.order_items || []).map((i: any) => ({
-            name: i.product_name || 'Item',
-            quantity: i.quantity,
+        created_at: String(row.created_at),
+        tracking_number: typeof meta.tracking_number === 'string' ? meta.tracking_number : undefined,
+        items: items.map((i) => ({
+            name: String(i.product_name || 'Item'),
+            quantity: Number(i.quantity) || 0,
             price: Number(i.unit_price) || 0,
         })),
     };
@@ -413,24 +384,28 @@ export async function trackOrder(supabase: any, orderNumber: string, email: stri
 
 // ─── 4. Get Customer Orders ─────────────────────────────────────────────────
 
-export async function getCustomerOrders(supabase: any, userId: string, limit = 5): Promise<ChatOrder[]> {
+export async function getCustomerOrders(_supabase: unknown, userId: string, limit = 5): Promise<ChatOrder[]> {
     if (!userId) return [];
 
-    const { data, error } = await supabase
-        .from('orders')
-        .select(
-            `
-      id, order_number, status, payment_status, total, created_at,
-      order_items(product_name, quantity, unit_price, total_price)
-    `,
-        )
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(limit);
+    const data = await query<Record<string, unknown>>(
+        `SELECT o.id, o.order_number, o.status, o.payment_status, o.total, o.created_at, o.metadata,
+                COALESCE((
+                  SELECT jsonb_agg(jsonb_build_object(
+                    'product_name', oi.product_name,
+                    'quantity', oi.quantity,
+                    'unit_price', oi.unit_price,
+                    'total_price', oi.total_price
+                  ) ORDER BY oi.created_at)
+                  FROM order_items oi WHERE oi.order_id = o.id
+                ), '[]'::jsonb) AS order_items
+           FROM orders o
+          WHERE o.user_id = $1::uuid
+          ORDER BY o.created_at DESC
+          LIMIT $2`,
+        [userId, limit]
+    );
 
-    if (error || !data) return [];
-
-    return data.map((o: any) => ({
+    return data.map((o) => ({
         id: o.id,
         order_number: o.order_number,
         status: o.status,
@@ -448,16 +423,15 @@ export async function getCustomerOrders(supabase: any, userId: string, limit = 5
 
 // ─── 5. Check Coupon ────────────────────────────────────────────────────────
 
-export async function checkCoupon(supabase: any, code: string, cartTotal?: number): Promise<ChatCoupon> {
+export async function checkCoupon(_supabase: unknown, code: string, cartTotal?: number): Promise<ChatCoupon> {
     const trimmed = (code || '').trim().toUpperCase();
     if (!trimmed) return { valid: false, code: trimmed, reason: 'No code provided.' };
 
-    const { data, error } = await supabase
-        .from('coupons')
-        .select('*')
-        .ilike('code', trimmed)
-        .maybeSingle();
-    if (error || !data) {
+    const data = await queryOne<Record<string, unknown>>(
+        `SELECT * FROM coupons WHERE upper(code) = upper($1) LIMIT 1`,
+        [trimmed]
+    );
+    if (!data) {
         return { valid: false, code: trimmed, reason: 'This coupon code does not exist.' };
     }
 
@@ -511,41 +485,28 @@ export async function checkCoupon(supabase: any, code: string, cartTotal?: numbe
 // ─── 6. Create Support Ticket ───────────────────────────────────────────────
 
 export async function createSupportTicket(
-    supabase: any,
+    _supabase: unknown,
     params: { userId?: string; email: string; subject: string; description: string; category?: string },
 ): Promise<ChatTicket | null> {
     const { userId, email, subject, description, category } = params;
     if (!email || !subject || !description) return null;
 
     try {
-        const { data: ticket, error } = await supabase
-            .from('support_tickets')
-            .insert({
-                user_id: userId || null,
-                email,
-                subject,
-                description,
-                category: category || 'other',
-                status: 'open',
-                priority: 'medium',
-            })
-            .select('id, ticket_number, status, subject')
-            .single();
+        const ticket = await queryOne<{ id: string; ticket_number: number; status: string; subject: string }>(
+            `INSERT INTO support_tickets (user_id, email, subject, description, category, status, priority)
+             VALUES ($1::uuid, $2, $3, $4, $5, 'open', 'medium')
+             RETURNING id, ticket_number, status, subject`,
+            [userId || null, email, subject, description, category || 'other']
+        );
 
-        if (error || !ticket) {
-            console.error('[ChatTools] createSupportTicket error:', error);
-            return null;
-        }
+        if (!ticket) return null;
 
-        // Best-effort initial message — table exists in schema but RLS may block
-        // anon inserts. Failure here doesn't block ticket creation.
         try {
-            await supabase.from('support_messages').insert({
-                ticket_id: ticket.id,
-                user_id: userId || null,
-                message: description,
-                is_internal: false,
-            });
+            await query(
+                `INSERT INTO support_messages (ticket_id, user_id, message, is_internal)
+                 VALUES ($1::uuid, $2::uuid, $3, false)`,
+                [ticket.id, userId || null, description]
+            );
         } catch {
             /* ignore */
         }
@@ -565,41 +526,32 @@ export async function createSupportTicket(
 // ─── 7. Initiate Return ─────────────────────────────────────────────────────
 
 export async function initiateReturn(
-    supabase: any,
+    _supabase: unknown,
     params: { userId: string; orderId: string; reason: string; description: string },
 ): Promise<ChatReturn | null> {
     const { userId, orderId, reason, description } = params;
     if (!userId || !orderId) return null;
 
     try {
-        const { data: order } = await supabase
-            .from('orders')
-            .select('id, order_number, status, created_at, user_id')
-            .eq('id', orderId)
-            .maybeSingle();
+        const order = await queryOne<{ id: string; order_number: string; status: string; created_at: string; user_id: string }>(
+            `SELECT id, order_number, status::text AS status, created_at, user_id::text AS user_id
+               FROM orders WHERE id = $1::uuid`,
+            [orderId]
+        );
 
         if (!order || order.user_id !== userId || order.status !== 'delivered') return null;
 
-        const deliveredDate = new Date(order.created_at);
-        const daysSince = (Date.now() - deliveredDate.getTime()) / (1000 * 60 * 60 * 24);
+        const daysSince = (Date.now() - new Date(order.created_at).getTime()) / (1000 * 60 * 60 * 24);
         if (daysSince > 30) return null;
 
-        const { data: ret, error } = await supabase
-            .from('return_requests')
-            .insert({
-                order_id: orderId,
-                user_id: userId,
-                reason,
-                description,
-                status: 'pending',
-            })
-            .select('id, status')
-            .single();
+        const ret = await queryOne<{ id: string; status: string }>(
+            `INSERT INTO return_requests (order_id, user_id, reason, description, status)
+             VALUES ($1::uuid, $2::uuid, $3, $4, 'pending')
+             RETURNING id, status`,
+            [orderId, userId, reason, description]
+        );
 
-        if (error || !ret) {
-            console.error('[ChatTools] initiateReturn error:', error);
-            return null;
-        }
+        if (!ret) return null;
 
         return { id: ret.id, status: ret.status, order_number: order.order_number, reason };
     } catch (e) {
@@ -610,19 +562,27 @@ export async function initiateReturn(
 
 // ─── 8. Get Recommendations ─────────────────────────────────────────────────
 
-export async function getRecommendations(supabase: any, context?: string): Promise<ChatProduct[]> {
-    let q = supabase.from('products').select(PRODUCT_SELECT).eq('status', 'active');
-    if (context?.trim()) {
-        q = q.or(`name.ilike.%${context.trim()}%,description.ilike.%${context.trim()}%`);
-    }
-    const { data, error } = await q
-        .order('featured', { ascending: false })
-        .order('rating_avg', { ascending: false })
-        .order('review_count', { ascending: false })
-        .limit(8);
+export async function getRecommendations(_supabase: unknown, context?: string): Promise<ChatProduct[]> {
+    const ctx = context?.trim();
+    const rows = ctx
+        ? await loadActiveProducts(`(p.name ILIKE $1 OR p.description ILIKE $1)`, [`%${ctx}%`], 8)
+        : await query<Record<string, unknown>>(
+              `SELECT p.id, p.name, p.slug, p.status, p.description, p.price, p.compare_at_price, p.quantity, p.moq,
+                      COALESCE((
+                        SELECT jsonb_agg(jsonb_build_object('id', v.id, 'name', v.name, 'price', v.price, 'compare_at_price', v.compare_at_price, 'quantity', v.quantity))
+                        FROM product_variants v WHERE v.product_id = p.id
+                      ), '[]'::jsonb) AS product_variants,
+                      COALESCE((
+                        SELECT jsonb_agg(jsonb_build_object('url', i.url, 'position', i.position) ORDER BY i.position)
+                        FROM product_images i WHERE i.product_id = p.id
+                      ), '[]'::jsonb) AS product_images
+                 FROM products p
+                WHERE p.status = 'active'
+                ORDER BY p.featured DESC, p.rating_avg DESC NULLS LAST, p.review_count DESC NULLS LAST
+                LIMIT 8`
+          ).then((r) => r.map((p) => mapProduct(p)));
 
-    if (error || !data) return [];
-    const mapped = data.map((p: any) => mapProduct(p)).filter((p: ChatProduct) => p.inStock);
+    const mapped = (ctx ? rows : rows).filter((p) => p.inStock);
     return mapped.slice(0, 4);
 }
 
@@ -647,20 +607,22 @@ export function getStoreInfo(topic: string): string {
 
 // ─── 10. Get Customer Profile ───────────────────────────────────────────────
 
-export async function getCustomerProfile(supabase: any, userId: string): Promise<ChatCustomerProfile | null> {
+export async function getCustomerProfile(_supabase: unknown, userId: string): Promise<ChatCustomerProfile | null> {
     if (!userId) return null;
 
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name, email')
-        .eq('id', userId)
-        .maybeSingle();
+    const profile = await queryOne<{ full_name: string | null; email: string }>(
+        `SELECT p.full_name, u.email
+           FROM profiles p
+           JOIN users u ON u.id = p.id
+          WHERE p.id = $1::uuid`,
+        [userId]
+    );
     if (!profile) return null;
 
-    const { data: orders } = await supabase
-        .from('orders')
-        .select('total, created_at, payment_status')
-        .eq('user_id', userId);
+    const orders = await query<{ total: number; created_at: string; payment_status: string }>(
+        `SELECT total, created_at, payment_status::text AS payment_status FROM orders WHERE user_id = $1::uuid`,
+        [userId]
+    );
 
     let totalSpent = 0;
     let orderCount = 0;
@@ -763,13 +725,6 @@ export async function createChatOrder(
 ): Promise<ChatOrderResult> {
     // Use service-role client so we can write to orders/order_items/payments
     // regardless of the (possibly anon) chat caller's RLS.
-    let admin: any = supabaseFallback;
-    try {
-        admin = supabaseAdmin;
-    } catch {
-        admin = supabaseFallback;
-    }
-
     const { items, shipping, deliveryMethod, paymentMethod, userId } = params;
 
     if (!items?.length) {
@@ -833,17 +788,26 @@ export async function createChatOrder(
 
     try {
         const productIds = items.map((i) => i.productId);
-        const { data: products, error: prodError } = await admin
-            .from('products')
-            .select(PRODUCT_SELECT)
-            .in('id', productIds)
-            .eq('status', 'active');
+        const products = await query<Record<string, unknown>>(
+            `SELECT p.id, p.name, p.slug, p.status, p.description, p.price, p.compare_at_price, p.quantity, p.moq,
+                    COALESCE((
+                      SELECT jsonb_agg(jsonb_build_object('id', v.id, 'name', v.name, 'price', v.price, 'sku', v.sku, 'compare_at_price', v.compare_at_price, 'quantity', v.quantity))
+                      FROM product_variants v WHERE v.product_id = p.id
+                    ), '[]'::jsonb) AS product_variants,
+                    COALESCE((
+                      SELECT jsonb_agg(jsonb_build_object('url', i.url, 'position', i.position) ORDER BY i.position)
+                      FROM product_images i WHERE i.product_id = p.id
+                    ), '[]'::jsonb) AS product_images
+               FROM products p
+              WHERE p.status = 'active' AND p.id = ANY($1::uuid[])`,
+            [productIds]
+        );
 
-        if (prodError || !products?.length) {
+        if (!products.length) {
             return { success: false, message: 'Could not find the requested products. They may no longer be available.' };
         }
 
-        const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
+        const productMap = new Map<string, Record<string, unknown>>(products.map((p) => [String(p.id), p]));
 
         for (const item of items) {
             const p = productMap.get(item.productId);
@@ -893,52 +857,55 @@ export async function createChatOrder(
             email: sanitizedShipping.email,
         };
 
-        const { data: order, error: orderError } = await admin
-            .from('orders')
-            .insert({
-                order_number: orderNumber,
-                user_id: userId || null,
-                email: sanitizedShipping.email,
-                phone: sanitizedShipping.phone,
-                status: 'pending',
-                payment_status: 'pending',
-                currency: 'GHS',
+        const order = await queryOne<{ id: string }>(
+            `INSERT INTO orders (
+               order_number, user_id, email, phone, status, payment_status, currency,
+               subtotal, tax_total, shipping_total, discount_total, total,
+               shipping_method, payment_method, payment_provider, shipping_address, billing_address, notes
+             ) VALUES (
+               $1, $2::uuid, $3, $4, 'pending'::order_status, 'pending'::payment_status, 'GHS',
+               $5, 0, $6, 0, $7,
+               $8, $9, $10, $11::jsonb, $12::jsonb, $13
+             ) RETURNING id`,
+            [
+                orderNumber,
+                userId || null,
+                sanitizedShipping.email,
+                sanitizedShipping.phone,
                 subtotal,
-                tax_total: 0,
-                shipping_total: shippingCost,
-                discount_total: 0,
+                shippingCost,
                 total,
-                shipping_method: deliveryMethod,
-                payment_method: paymentMethod,
-                payment_provider: paymentMethod === 'moolre' ? 'moolre' : null,
-                shipping_address: shippingAddress,
-                billing_address: shippingAddress,
-                notes: `Chat checkout — delivery: ${deliveryMethod}, pay: ${paymentMethod}`,
-            })
-            .select('id')
-            .single();
+                deliveryMethod,
+                paymentMethod,
+                paymentMethod === 'moolre' ? 'moolre' : null,
+                JSON.stringify(shippingAddress),
+                JSON.stringify(shippingAddress),
+                `Chat checkout — delivery: ${deliveryMethod}, pay: ${paymentMethod}`,
+            ]
+        );
 
-        if (orderError || !order) {
-            console.error('[ChatTools] createChatOrder order insert:', orderError);
+        if (!order) {
             return { success: false, message: 'Failed to create order. Please try checkout on the website.' };
         }
 
-        const orderItems = lineDetails.map((row) => ({
-            order_id: order.id,
-            product_id: row.product.id,
-            variant_id: row.variant?.id || null,
-            product_name: row.product.name,
-            variant_name: row.variant?.name || null,
-            sku: row.variant?.sku || null,
-            unit_price: row.unit,
-            quantity: row.qty,
-            total_price: row.unit * row.qty,
-        }));
-
-        const { error: itemsError } = await admin.from('order_items').insert(orderItems);
-        if (itemsError) {
-            console.error('[ChatTools] order_items:', itemsError);
-            return { success: false, message: 'Failed to add items to order. Please try again.' };
+        for (const row of lineDetails) {
+            await query(
+                `INSERT INTO order_items (
+                   order_id, product_id, variant_id, product_name, variant_name, sku,
+                   unit_price, quantity, total_price
+                 ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9)`,
+                [
+                    order.id,
+                    row.product.id,
+                    row.variant?.id || null,
+                    row.product.name,
+                    row.variant?.name || null,
+                    row.variant?.sku || null,
+                    row.unit,
+                    row.qty,
+                    row.unit * row.qty,
+                ]
+            );
         }
 
         if (paymentMethod === 'cod') {

@@ -167,6 +167,16 @@ export const RATE_LIMITS = {
     windowSeconds: 60 // 20 TTS calls per minute
   },
 
+  login: {
+    maxRequests: 8,
+    windowSeconds: 60
+  },
+
+  accountAction: {
+    maxRequests: 5,
+    windowSeconds: 60
+  },
+
   // General API - default limits
   default: {
     maxRequests: 100,

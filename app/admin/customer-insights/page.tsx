@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { asNumber } from '@/lib/format-money';
 
 // Helper for currency formatting
-const formatCurrency = (amount: number) => {
+const formatCurrency = (amount: unknown) => {
   return new Intl.NumberFormat('en-GH', {
     style: 'currency',
     currency: 'GHS'
-  }).format(amount);
+  }).format(asNumber(amount));
 };
 
 export default function CustomerInsightsPage() {
@@ -35,24 +36,12 @@ export default function CustomerInsightsPage() {
     try {
       setLoading(true);
 
-      // 1. Fetch Profiles
-      const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('*');
+      const rows = await apiData<any[]>('/api/admin/customers');
+      const orders = await apiData<any[]>('/api/orders');
 
-      if (profileError) throw profileError;
-
-      // 2. Fetch Orders for calculations
-      const { data: orders, error: orderError } = await supabase
-        .from('orders')
-        .select('user_id, total, created_at, status');
-
-      if (orderError) throw orderError;
-
-      // 3. Aggregate Data
-      const aggregated = profiles.map((profile: any) => {
-        const userOrders = orders?.filter(o => o.user_id === profile.id) || [];
-        const totalSpent = userOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+      const aggregated = rows.map((profile: any) => {
+        const userOrders = orders?.filter((o) => o.user_id === profile.user_id || o.email === profile.email) || [];
+        const totalSpent = userOrders.reduce((sum, o) => sum + asNumber(o.total), 0);
         const orderCount = userOrders.length;
 
         // Sort orders to find last order
@@ -120,7 +109,7 @@ export default function CustomerInsightsPage() {
 
 
   const filteredCustomers = customers.filter(customer => {
-    const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = (customer.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSegment = selectedSegment === 'all' || customer.segment === selectedSegment;
     return matchesSearch && matchesSegment;
@@ -128,8 +117,8 @@ export default function CustomerInsightsPage() {
 
   const getSegmentBadge = (segment: string) => {
     const badges: any = {
-      vip: 'bg-brand-nude/50 text-brand-espresso',
-      returning: 'bg-brand-nude/50 text-brand-espresso',
+      vip: 'bg-store-surface text-store-ink',
+      returning: 'bg-store-surface text-store-ink',
       new: 'bg-amber-100 text-amber-700',
       'at-risk': 'bg-red-100 text-red-700'
     };
@@ -148,7 +137,7 @@ export default function CustomerInsightsPage() {
 
   const getRiskBadge = (risk: string) => {
     const badges: any = {
-      low: 'bg-brand-nude/50 text-brand-espresso',
+      low: 'bg-store-surface text-store-ink',
       medium: 'bg-amber-100 text-amber-700',
       high: 'bg-red-100 text-red-700'
     };
@@ -182,24 +171,24 @@ export default function CustomerInsightsPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-brand-nude/50 rounded-lg">
-                <i className="ri-vip-crown-line text-2xl text-brand-espresso"></i>
+              <div className="w-12 h-12 flex items-center justify-center bg-store-surface rounded-lg">
+                <i className="ri-vip-crown-line text-2xl text-store-ink"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">VIP Customers</p>
             <p className="text-3xl font-bold text-gray-900">{stats.vip}</p>
-            <p className="text-sm text-brand-espresso font-semibold mt-2">Spent &gt; GH₵1,000</p>
+            <p className="text-sm text-store-ink font-semibold mt-2">Spent &gt; GH₵1,000</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-brand-nude/50 rounded-lg">
-                <i className="ri-refresh-line text-2xl text-brand-espresso"></i>
+              <div className="w-12 h-12 flex items-center justify-center bg-store-surface rounded-lg">
+                <i className="ri-refresh-line text-2xl text-store-ink"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">Returning Customers</p>
             <p className="text-3xl font-bold text-gray-900">{stats.returning}</p>
-            <p className="text-sm text-brand-espresso font-semibold mt-2">More than 1 order</p>
+            <p className="text-sm text-store-ink font-semibold mt-2">More than 1 order</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-6">
@@ -215,8 +204,8 @@ export default function CustomerInsightsPage() {
 
           <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-purple-100 rounded-lg">
-                <i className="ri-line-chart-line text-2xl text-purple-700"></i>
+              <div className="w-12 h-12 flex items-center justify-center bg-store-primary/15 rounded-lg">
+                <i className="ri-line-chart-line text-2xl text-store-primary"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">Avg. Lifetime Value</p>
@@ -235,7 +224,7 @@ export default function CustomerInsightsPage() {
                   placeholder="Search customers by name or email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso text-sm"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary text-sm"
                 />
               </div>
             </div>
@@ -273,7 +262,7 @@ export default function CustomerInsightsPage() {
               <div key={customer.id} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-start space-x-4">
-                    <div className="w-16 h-16 flex items-center justify-center bg-gradient-to-br from-brand-mauve to-brand-espresso rounded-full text-white text-2xl font-bold">
+                    <div className="w-16 h-16 flex items-center justify-center bg-gradient-to-br from-store-muted to-store-navy rounded-full text-white text-2xl font-bold">
                       {customer.name?.charAt(0).toUpperCase() || 'U'}
                     </div>
                     <div>
@@ -320,15 +309,15 @@ export default function CustomerInsightsPage() {
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
                     <p className="text-sm text-gray-600 mb-1">Lifetime Value</p>
-                    <p className="text-2xl font-bold text-brand-espresso">{formatCurrency(customer.lifetimeValue)}</p>
+                    <p className="text-2xl font-bold text-store-ink">{formatCurrency(customer.lifetimeValue)}</p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
                     <p className="text-sm text-gray-600 mb-1">Engagement</p>
                     <div className="flex items-center space-x-2">
                       <div className="flex-1 bg-gray-200 rounded-full h-2">
                         <div
-                          className={`h-2 rounded-full ${customer.engagementScore >= 80 ? 'bg-brand-espresso' :
-                            customer.engagementScore >= 60 ? 'bg-brand-espresso' :
+                          className={`h-2 rounded-full ${customer.engagementScore >= 80 ? 'bg-store-navy-light' :
+                            customer.engagementScore >= 60 ? 'bg-store-navy-light' :
                               customer.engagementScore >= 40 ? 'bg-amber-600' : 'bg-red-600'
                             }`}
                           style={{ width: `${customer.engagementScore}%` }}

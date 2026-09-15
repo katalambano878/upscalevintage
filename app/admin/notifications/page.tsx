@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
 
 export default function NotificationsPage() {
     const [loading, setLoading] = useState(false);
@@ -22,18 +22,7 @@ export default function NotificationsPage() {
         setSuccess('');
 
         try {
-            // 1. Get auth token for admin verification
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.access_token) {
-                throw new Error('You must be logged in as admin to send campaigns');
-            }
-
-            // 2. Fetch Recipients from the customers table (includes secondary contacts)
-            const { data: customers, error: fetchError } = await supabase
-                .from('customers')
-                .select('email, phone, full_name, secondary_phone, secondary_email');
-
-            if (fetchError) throw fetchError;
+            const customers = await apiData<any[]>('/api/admin/customers');
 
             // Build recipients with deduplication
             const seenPhones = new Set<string>();
@@ -42,7 +31,7 @@ export default function NotificationsPage() {
             const normalizePhone = (p: string) => p.replace(/[\s\-\(\)\.]+/g, '').replace(/^00/, '+');
 
             const recipients: any[] = [];
-            for (const c of (customers || [])) {
+            for (const c of customers || []) {
                 const phones = [c.phone, c.secondary_phone].filter(Boolean).map((p: string) => normalizePhone(p));
                 const emails = [c.email, c.secondary_email].filter(Boolean).map((e: string) => e.toLowerCase().trim());
 
@@ -95,8 +84,8 @@ export default function NotificationsPage() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${session.access_token}`
                     },
+                    credentials: 'include',
                     body: JSON.stringify({
                         type: 'campaign',
                         payload: {
@@ -150,7 +139,7 @@ export default function NotificationsPage() {
             <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
                 <h2 className="text-xl font-semibold mb-6">Send New Campaign</h2>
 
-                {success && <div className="bg-brand-nude/30 text-brand-espresso p-4 rounded-lg mb-4">{success}</div>}
+                {success && <div className="bg-store-surface text-store-ink p-4 rounded-lg mb-4">{success}</div>}
                 {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg mb-4">{error}</div>}
 
                 <form onSubmit={handleSend} className="space-y-6">
@@ -159,7 +148,7 @@ export default function NotificationsPage() {
                         <select
                             value={form.audience}
                             onChange={e => setForm({ ...form, audience: e.target.value })}
-                            className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-mauve/40"
+                            className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-store-primary"
                         >
                             <option value="all">All Customers</option>
                             <option value="newsletter">Newsletter Subscribers</option>
@@ -172,7 +161,7 @@ export default function NotificationsPage() {
                                 type="checkbox"
                                 checked={form.channels.email}
                                 onChange={e => setForm({ ...form, channels: { ...form.channels, email: e.target.checked } })}
-                                className="w-5 h-5 text-brand-espresso rounded focus:ring-brand-mauve/40 cursor-pointer"
+                                className="w-5 h-5 text-store-muted rounded focus:ring-store-primary cursor-pointer"
                             />
                             <span className="font-medium text-gray-900">Send Email</span>
                         </label>
@@ -181,7 +170,7 @@ export default function NotificationsPage() {
                                 type="checkbox"
                                 checked={form.channels.sms}
                                 onChange={e => setForm({ ...form, channels: { ...form.channels, sms: e.target.checked } })}
-                                className="w-5 h-5 text-brand-espresso rounded focus:ring-brand-mauve/40 cursor-pointer"
+                                className="w-5 h-5 text-store-muted rounded focus:ring-store-primary cursor-pointer"
                             />
                             <span className="font-medium text-gray-900">Send SMS</span>
                         </label>
@@ -194,7 +183,7 @@ export default function NotificationsPage() {
                                 type="text"
                                 value={form.subject}
                                 onChange={e => setForm({ ...form, subject: e.target.value })}
-                                className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-brand-mauve/40"
+                                className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-store-primary"
                                 placeholder="e.g., Summer Sale Starts Now!"
                                 required={form.channels.email}
                             />
@@ -206,7 +195,7 @@ export default function NotificationsPage() {
                         <textarea
                             value={form.message}
                             onChange={e => setForm({ ...form, message: e.target.value })}
-                            className="w-full p-3 border border-gray-300 rounded-lg h-40 outline-none focus:ring-2 focus:ring-brand-mauve/40"
+                            className="w-full p-3 border border-gray-300 rounded-lg h-40 outline-none focus:ring-2 focus:ring-store-primary"
                             placeholder="Write your message here... For emails, this supports plain text."
                             required
                         />
@@ -216,7 +205,7 @@ export default function NotificationsPage() {
                     <button
                         type="submit"
                         disabled={loading || (!form.channels.email && !form.channels.sms)}
-                        className="w-full bg-brand-espresso text-white py-4 rounded-lg font-bold text-lg hover:bg-brand-cocoa transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        className="w-full bg-store-navy text-white py-4 rounded-lg font-bold text-lg hover:bg-store-navy transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                         {loading ? (
                             <span className="flex items-center justify-center">

@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { money } from '@/lib/format-money';
 import FraudDetectionAlert from '@/components/FraudDetectionAlert';
 
 interface OrderDetailClientProps {
@@ -29,6 +30,13 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
     window.print();
   };
 
+  const getCustomerName = (o: any) => {
+    const shippingAddress = o.shipping_address || {};
+    return shippingAddress.firstName && shippingAddress.lastName
+      ? `${shippingAddress.firstName.trim()} ${shippingAddress.lastName.trim()}`
+      : shippingAddress.full_name || shippingAddress.firstName || o.email?.split('@')[0] || 'Customer';
+  };
+
   // Inject print styles
   useEffect(() => {
     const styleId = 'order-print-styles';
@@ -47,63 +55,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const fetchOrderDetails = useCallback(async () => {
     try {
       setLoading(true);
-      // Try to fetch by ID or order_number
-      let query = supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            id,
-            product_id,
-            product_name,
-            variant_name,
-            sku,
-            quantity,
-            unit_price,
-            total_price,
-            metadata,
-            products (
-              product_images (url)
-            )
-          )
-        `)
-        .eq('id', orderId);
-
-      let { data, error } = await query.single();
-
-      if (error && error.code === 'PGRST116') {
-        // Not found by ID, try order_number
-        const { data: dataByNum, error: errorByNum } = await supabase
-          .from('orders')
-          .select(`
-            *,
-            order_items (
-              id,
-              product_id,
-              product_name,
-              variant_name,
-              sku,
-              quantity,
-              unit_price,
-              total_price,
-              metadata,
-              products (
-                product_images (url)
-              )
-            )
-          `)
-          .eq('order_number', orderId)
-          .single();
-
-        if (dataByNum) {
-          data = dataByNum;
-          error = null;
-        } else {
-          error = errorByNum;
-        }
-      }
-
-      if (error) throw error;
+      const data = await apiData<any>(`/api/orders/${encodeURIComponent(orderId)}`);
       setOrder(data);
       setTrackingNumber(data.metadata?.tracking_number || '');
       setAdminNotes(data.notes || '');
@@ -125,19 +77,28 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       setStatusUpdating(true);
       const statusToUpdate = newStatus || order.status;
 
-      const { error } = await supabase
-        .from('orders')
-        .update({
+      if (
+        (statusToUpdate === 'shipped' || statusToUpdate === 'delivered') &&
+        order.payment_status !== 'paid'
+      ) {
+        alert(
+          'Cannot mark as packaged/delivered until the order is fully paid. Remaining balance is due before pickup or delivery.'
+        );
+        setStatusUpdating(false);
+        return;
+      }
+
+      await apiData(`/api/orders/${order.id}`, {
+        method: 'PATCH',
+        json: {
           status: statusToUpdate,
           notes: adminNotes,
           metadata: {
             ...order.metadata,
-            tracking_number: trackingNumber
-          }
-        })
-        .eq('id', order.id);
-
-      if (error) throw error;
+            tracking_number: trackingNumber,
+          },
+        },
+      });
 
       // Update local state
       setOrder({
@@ -153,26 +114,22 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       const trackingChanged = trackingNumber !== order.metadata?.tracking_number;
 
       if (statusChanged || (trackingChanged && trackingNumber)) {
-        // Get auth token for notification API
-        const { data: { session } } = await supabase.auth.getSession();
-        const authToken = session?.access_token;
-
         fetch('/api/notifications', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(authToken && { 'Authorization': `Bearer ${authToken}` })
           },
+          credentials: 'include',
           body: JSON.stringify({
             type: 'order_status',
             payload: {
               email: order.email,
-              name: customerName,
+              name: getCustomerName(order),
               orderId: orderId,
               orderNumber: order.order_number || orderId,
               status: statusToUpdate,
               trackingNumber: trackingNumber,
-              phone: shippingAddress.phone || order.phone // Ensure phone is passed for SMS
+              phone: (order.shipping_address || {}).phone || order.phone
             }
           })
         }).catch(err => console.error('Notification error:', err));
@@ -180,9 +137,10 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
       alert('Order updated successfully');
       setShowStatusMenu(false);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Error updating order:', err);
-      alert('Failed to update order');
+      const message = err instanceof Error ? err.message : 'Failed to update order';
+      alert(message || 'Failed to update order');
     } finally {
       setStatusUpdating(false);
     }
@@ -196,26 +154,18 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
     try {
       setResendingNotification(true);
 
-      // Get auth token
-      const { data: { session } } = await supabase.auth.getSession();
-      const authToken = session?.access_token;
-
       const shippingAddress = order.shipping_address || {};
-      const customerName = (shippingAddress.firstName && shippingAddress.lastName)
-        ? `${shippingAddress.firstName.trim()} ${shippingAddress.lastName.trim()}`
-        : shippingAddress.full_name || shippingAddress.firstName || order.email?.split('@')[0] || 'Customer';
-
       const response = await fetch('/api/notifications', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(authToken && { 'Authorization': `Bearer ${authToken}` })
         },
+        credentials: 'include',
         body: JSON.stringify({
           type: 'order_status',
           payload: {
             email: order.email,
-            name: customerName,
+            name: getCustomerName(order),
             orderNumber: order.order_number || order.id,
             status: order.status,
             trackingNumber: order.metadata?.tracking_number || '',
@@ -243,9 +193,9 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const statusLabel = (s: string) => s === 'shipped' ? 'Packaged' : s.charAt(0).toUpperCase() + s.slice(1);
   const statusColors: any = {
     'pending': 'bg-amber-100 text-amber-700 border-amber-200',
-    'processing': 'bg-brand-nude/50 text-brand-espresso border-brand-nude/70',
-    'shipped': 'bg-purple-100 text-purple-700 border-purple-200',
-    'delivered': 'bg-brand-nude/50 text-brand-espresso border-brand-nude/70',
+    'processing': 'bg-store-surface text-store-ink border-gray-200',
+    'shipped': 'bg-store-primary/15 text-store-primary border-store-primary/30',
+    'delivered': 'bg-store-surface text-store-ink border-gray-200',
     'cancelled': 'bg-red-100 text-red-700 border-red-200',
     'awaiting_payment': 'bg-gray-100 text-gray-700 border-gray-200'
   };
@@ -262,7 +212,14 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   // Derive timeline from status (simplified logic as we don't have full history table joined here yet)
   const timeline = [
     { status: 'Order Placed', date: new Date(order.created_at).toLocaleString(), completed: true },
-    { status: 'Payment', date: order.payment_status, completed: order.payment_status === 'paid' },
+    {
+      status: 'Payment',
+      date:
+        order.payment_status === 'partially_paid'
+          ? `Half paid · GH₵ ${Number(order.metadata?.balance_due || 0).toFixed(2)} due before pickup/delivery`
+          : order.payment_status,
+      completed: order.payment_status === 'paid' || order.payment_status === 'partially_paid',
+    },
     { status: 'Processing', date: '', completed: ['processing', 'shipped', 'delivered'].includes(order.status) },
     { status: 'Packaged', date: '', completed: ['shipped', 'delivered'].includes(order.status) },
     { status: 'Delivered', date: '', completed: order.status === 'delivered' }
@@ -284,7 +241,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
           {/* Header */}
           <div className="flex justify-between items-start border-b-2 border-gray-800 pb-4 mb-4">
             <div>
-              <h1 className="text-2xl font-bold">YOUR_APP_TITLE</h1>
+              <h1 className="text-2xl font-bold">Mamator</h1>
               <p className="text-sm text-gray-600">Order Packing Slip</p>
             </div>
             <div className="text-right">
@@ -322,7 +279,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                     <td className="py-2 px-2 font-medium">{item.product_name}</td>
                     <td className="py-2 px-2 text-sm">{item.variant_name || '-'}</td>
                     <td className="py-2 px-2 text-center font-bold">{item.quantity}</td>
-                    <td className="py-2 px-2 text-right">GH₵ {item.unit_price?.toFixed(2)}</td>
+                    <td className="py-2 px-2 text-right">GH₵ {money(item.unit_price)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -337,16 +294,15 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               {trackingNumber && <p><span className="font-semibold">Tracking #:</span> {trackingNumber}</p>}
             </div>
             <div className="text-right">
-              <p>Subtotal: GH₵ {order?.subtotal?.toFixed(2)}</p>
-              <p>Shipping: GH₵ {order?.shipping_total?.toFixed(2)}</p>
-              <p className="font-bold text-lg border-t border-gray-400 pt-1 mt-1">Total: GH₵ {order?.total?.toFixed(2)}</p>
+              <p>Subtotal: GH₵ {money(order?.subtotal)}</p>
+              <p>Shipping: GH₵ {money(order?.shipping_total)}</p>
+              <p className="font-bold text-lg border-t border-gray-400 pt-1 mt-1">Total: GH₵ {money(order?.total)}</p>
             </div>
           </div>
 
           {/* Footer */}
           <div className="border-t-2 border-gray-800 pt-4 text-center text-sm text-gray-600">
-            <p>Thank you for shopping with YOUR_APP_TITLE!</p>
-            <p>Questions? Call YOUR_PHONE or WhatsApp YOUR_WHATSAPP · your@email.com</p>
+            <p>Thank you for shopping with Mamator!</p>
           </div>
         </div>
       </div>
@@ -408,7 +364,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                       <p className="text-xs text-gray-500">SKU: {item.sku}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-900 mb-1">GH₵ {item.unit_price?.toFixed(2)}</p>
+                      <p className="font-semibold text-gray-900 mb-1">GH₵ {money(item.unit_price)}</p>
                       <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                     </div>
                   </div>
@@ -418,25 +374,25 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
                 <div className="flex justify-between text-gray-700">
                   <span>Subtotal</span>
-                  <span>GH₵ {order.subtotal?.toFixed(2)}</span>
+                  <span>GH₵ {money(order.subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-gray-700">
                   <span>Shipping</span>
-                  <span>GH₵ {order.shipping_total?.toFixed(2)}</span>
+                  <span>GH₵ {money(order.shipping_total)}</span>
                 </div>
                 <div className="flex justify-between text-gray-700">
                   <span>Tax</span>
-                  <span>GH₵ {order.tax_total?.toFixed(2)}</span>
+                  <span>GH₵ {money(order.tax_total)}</span>
                 </div>
                 {order.discount_total > 0 && (
-                  <div className="flex justify-between text-brand-espresso font-semibold">
+                  <div className="flex justify-between text-store-ink font-semibold">
                     <span>Discount</span>
-                    <span>-GH₵ {order.discount_total?.toFixed(2)}</span>
+                    <span>-GH₵ {money(order.discount_total)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xl font-bold text-gray-900 pt-3 border-t border-gray-200">
                   <span>Total</span>
-                  <span>GH₵ {order.total?.toFixed(2)}</span>
+                  <span>GH₵ {money(order.total)}</span>
                 </div>
               </div>
             </div>
@@ -446,7 +402,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               <div className="space-y-4">
                 {timeline.map((event, index) => (
                   <div key={index} className="flex items-start space-x-4">
-                    <div className={`w-10 h-10 flex items-center justify-center rounded-full border-2 ${event.completed ? 'bg-brand-espresso border-brand-espresso' : 'bg-white border-gray-300'
+                    <div className={`w-10 h-10 flex items-center justify-center rounded-full border-2 ${event.completed ? 'bg-store-navy border-store-navy' : 'bg-white border-gray-300'
                       }`}>
                       {event.completed ? (
                         <i className="ri-check-line text-white text-xl"></i>
@@ -487,7 +443,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                         onClick={() => {
                           handleUpdateStatus(status);
                         }}
-                        className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors ${status === currentStatus ? 'bg-brand-nude/30 font-semibold' : ''
+                        className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors ${status === currentStatus ? 'bg-store-surface font-semibold' : ''
                           }`}
                       >
                         {statusLabel(status)}
@@ -505,14 +461,14 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                   type="text"
                   value={trackingNumber}
                   onChange={(e) => setTrackingNumber(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary"
                 />
               </div>
 
               <button
                 onClick={() => handleUpdateStatus()}
                 disabled={statusUpdating}
-                className="w-full mt-4 bg-brand-espresso hover:bg-brand-cocoa text-white py-3 rounded-lg font-semibold transition-colors whitespace-nowrap disabled:opacity-50"
+                className="w-full mt-4 bg-store-navy hover:bg-store-navy text-white py-3 rounded-lg font-semibold transition-colors whitespace-nowrap disabled:opacity-50"
               >
                 {statusUpdating ? 'Updating...' : 'Update Status'}
               </button>
@@ -521,7 +477,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Customer</h2>
               <div className="flex items-start space-x-3 mb-4">
-                <div className="w-12 h-12 flex items-center justify-center bg-brand-nude/50 text-brand-espresso rounded-full font-semibold uppercase">
+                <div className="w-12 h-12 flex items-center justify-center bg-store-surface text-store-ink rounded-full font-semibold uppercase">
                   {customerName.substring(0, 2)}
                 </div>
                 <div>
@@ -556,17 +512,48 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Status</span>
-                  <span className="px-3 py-1 bg-brand-nude/50 text-brand-espresso rounded-full text-sm font-semibold whitespace-nowrap capitalize">
-                    {order.payment_status}
+                  <span className="px-3 py-1 bg-store-surface text-store-ink rounded-full text-sm font-semibold whitespace-nowrap capitalize">
+                    {order.payment_status === 'partially_paid' ? 'Half paid' : order.payment_status}
                   </span>
                 </div>
+                {order.metadata?.payment_option && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Plan</span>
+                    <span className="font-semibold text-gray-900 capitalize">
+                      {String(order.metadata.payment_option)} payment
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between">
-                  {/* Transaction ID might be in metadata depending on callback */}
+                  <span className="text-gray-600">Amount paid</span>
+                  <span className="font-semibold text-gray-900">
+                    GH₵ {money(order.metadata?.amount_paid || (order.payment_status === 'paid' ? order.total : 0))}
+                  </span>
+                </div>
+                {order.payment_status === 'partially_paid' && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Balance due</span>
+                    <span className="font-semibold text-amber-700">
+                      GH₵ {money(order.metadata?.balance_due)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between">
                   <span className="text-gray-600">Transaction</span>
                   <span className="text-sm text-gray-900 font-mono truncate max-w-[150px]">
                     {order.metadata?.moolre_reference || order.payment_transaction_id || 'N/A'}
                   </span>
                 </div>
+                {order.payment_status === 'partially_paid' && (
+                  <a
+                    href={`/pay/${order.order_number}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-center mt-2 text-sm font-semibold text-store-ink hover:underline"
+                  >
+                    Customer balance payment link →
+                  </a>
+                )}
               </div>
             </div>
 
@@ -578,7 +565,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               <button
                 onClick={handleResendNotification}
                 disabled={resendingNotification}
-                className="w-full bg-brand-espresso hover:bg-brand-espresso text-white py-3 rounded-lg font-semibold transition-colors whitespace-nowrap disabled:opacity-50 flex items-center justify-center"
+                className="w-full bg-store-navy-light hover:bg-store-navy text-white py-3 rounded-lg font-semibold transition-colors whitespace-nowrap disabled:opacity-50 flex items-center justify-center"
               >
                 {resendingNotification ? (
                   <>
@@ -605,7 +592,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                 placeholder="Add internal notes about this order..."
                 rows={4}
                 maxLength={500}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso resize-none"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary resize-none"
               />
               <button
                 onClick={() => handleUpdateStatus()}

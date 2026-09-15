@@ -1,83 +1,64 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { getPublicSupabaseCredentials, isSupabaseConfigured } from '@/lib/supabase-config';
+import { query } from '@/lib/db';
 
-function getSupabase() {
-    const { url, anonKey } = getPublicSupabaseCredentials();
-    return createClient(url, anonKey);
-}
-
-// Simple in-memory cache
-let cache: { data: any; timestamp: number } | null = null;
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes — products don't change frequently
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-    if (!isSupabaseConfigured()) {
-        return NextResponse.json([]);
-    }
-
-    const supabase = getSupabase();
     const { searchParams } = new URL(request.url);
     const featured = searchParams.get('featured') === 'true';
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const category = searchParams.get('category');
-
-    // Build a cache key from params
-    const cacheKey = `${featured}-${limit}-${category || 'all'}`;
-
-    // Check cache (only for featured/home requests — general shop is more dynamic)
-    if (featured && cache && cache.data?.[cacheKey] && Date.now() - cache.timestamp < CACHE_TTL) {
-        return NextResponse.json(cache.data[cacheKey], {
-            headers: {
-                'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800',
-                'X-Cache': 'HIT'
-            }
-        });
-    }
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50', 10) || 50, 1), 100);
+    const category = searchParams.get('category')?.trim() || null;
 
     try {
-        let query = supabase
-            .from('products')
-            .select(`
-                id, name, slug, price, compare_at_price, quantity, description, metadata,
-                categories(id, name, slug),
-                product_images(url, position),
-                product_variants(id, name, price, quantity)
-            `)
-            .order('created_at', { ascending: false });
+        const rows = await query<{
+            id: string;
+            name: string;
+            slug: string;
+            price: number;
+            compare_at_price: number | null;
+            quantity: number;
+            description: string | null;
+            metadata: unknown;
+            category: unknown;
+            product_images: unknown;
+            product_variants: unknown;
+        }>(
+            `SELECT p.id, p.name, p.slug, p.price, p.compare_at_price, p.quantity,
+                    p.description, p.metadata,
+                    CASE WHEN c.id IS NULL THEN NULL
+                         ELSE jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug)
+                    END AS category,
+                    COALESCE((
+                      SELECT jsonb_agg(jsonb_build_object('url', i.url, 'position', i.position) ORDER BY i.position)
+                      FROM product_images i WHERE i.product_id = p.id
+                    ), '[]'::jsonb) AS product_images,
+                    COALESCE((
+                      SELECT jsonb_agg(jsonb_build_object('id', v.id, 'name', v.name, 'price', v.price, 'quantity', v.quantity))
+                      FROM product_variants v WHERE v.product_id = p.id
+                    ), '[]'::jsonb) AS product_variants
+               FROM products p
+               LEFT JOIN categories c ON c.id = p.category_id
+              WHERE p.status = 'active'
+                AND ($1::boolean = false OR p.featured = true)
+                AND ($2::text IS NULL OR c.slug = $2 OR c.name ILIKE $2)
+              ORDER BY p.created_at DESC
+              LIMIT $3`,
+            [featured, category, limit]
+        );
 
-        // Always filter active products
-        query = query.eq('status', 'active');
-
-        if (featured) {
-            query = query.eq('featured', true).limit(limit);
-        } else if (category) {
-            // Filter by category slug or name
-            query = query.limit(limit);
-        } else {
-            query = query.limit(limit);
-        }
-
-        const { data, error } = await query;
-
-        if (error) {
-            console.error('[Storefront API] Products error:', error);
-            return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 });
-        }
-
-        // Cache the result
-        if (!cache) cache = { data: {}, timestamp: Date.now() };
-        cache.data[cacheKey] = data;
-        cache.timestamp = Date.now();
+        const data = rows.map((row) => ({
+            ...row,
+            categories: row.category,
+        }));
 
         return NextResponse.json(data, {
             headers: {
                 'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800',
-                'X-Cache': 'MISS'
-            }
+            },
         });
-    } catch (err: any) {
-        console.error('[Storefront API] Error:', err);
-        return NextResponse.json({ error: err.message }, { status: 500 });
+    } catch (err) {
+        console.error('[Storefront API] Products error:', (err as Error).message);
+        return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 });
     }
 }

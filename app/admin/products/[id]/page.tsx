@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import ProductForm from '@/components/admin/ProductForm';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
 
 export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -12,18 +12,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     async function fetchProduct() {
       try {
-        const { data, error } = await supabase
-          .from('products')
-          .select(`
-            *,
-            categories(id, name),
-            product_variants(*),
-            product_images(*)
-          `)
-          .eq('id', resolvedParams.id)
-          .single();
-
-        if (error) throw error;
+        const data = await apiData<any>(`/api/catalog/products/${resolvedParams.id}`);
         setProductData(data);
       } catch (error) {
         console.error('Error fetching product:', error);
@@ -41,7 +30,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <i className="ri-loader-4-line text-4xl text-brand-espresso animate-spin mb-4 block"></i>
+          <i className="ri-loader-4-line text-4xl text-store-ink animate-spin mb-4 block"></i>
           <p className="text-gray-500 font-medium">Loading product details...</p>
         </div>
       </div>

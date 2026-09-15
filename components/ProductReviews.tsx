@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
+import { apiPost } from '@/lib/client/api';
 import { cachedQuery, invalidateCache } from '@/lib/query-cache';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
 
@@ -27,7 +28,7 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
 
   const [reviewForm, setReviewForm] = useState({
     rating: 5,
@@ -37,31 +38,24 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
   const { getToken, verifying } = useRecaptcha();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user || null);
-    });
-
     fetchReviews();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchReviews uses productId; stable fetch on productId change
   }, [productId]);
 
   const fetchReviews = async () => {
     try {
-      const { data, error } = await cachedQuery<{ data: any; error: any }>(
+      const data = await cachedQuery<unknown[]>(
         `reviews:${productId}`,
-        (() => supabase
-          .from('reviews')
-          .select('*')
-          .eq('product_id', productId)
-          .eq('status', 'approved')
-          .order('created_at', { ascending: false })) as any,
+        async () => {
+          const res = await fetch(`/api/reviews?product_id=${encodeURIComponent(productId)}`);
+          if (!res.ok) throw new Error('Failed to load reviews');
+          return res.json();
+        },
         5 * 60 * 1000
       );
 
-      if (error) throw error;
-
       if (data) {
-        const formattedReviews = data.map((r: any) => ({
+        const formattedReviews = (data as Record<string, unknown>[]).map((r) => ({
           id: r.id,
           author: 'Verified Customer',
           rating: r.rating,
@@ -114,17 +108,14 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.from('reviews').insert([{
+      const { error } = await apiPost('/api/reviews', {
         product_id: productId,
-        user_id: user.id,
         rating: reviewForm.rating,
         title: reviewForm.title,
         content: reviewForm.content,
-        status: 'approved',
-        verified_purchase: false
-      }]);
+      });
 
-      if (error) throw error;
+      if (error) throw new Error(error.message);
 
       alert('Review submitted successfully!');
       setShowReviewForm(false);

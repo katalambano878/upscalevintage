@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { asNumber, money } from '@/lib/format-money';
 
 export default function InventoryManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,45 +21,37 @@ export default function InventoryManagementPage() {
   const fetchInventory = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          id,
-          name,
-          sku,
-          price,
-          quantity,
-          categories(name)
-        `)
-        .order('name');
-
-      if (error) throw error;
-
-      if (data) {
-        const mapped = data.map((p: any) => {
-          const stock = p.quantity || 0;
+      const data = await apiData<any[]>('/api/catalog/products?status=all');
+      const rows = Array.isArray(data) ? data : [];
+      const mapped = rows
+        .filter((p) => p.status !== 'archived')
+        .map((p: any) => {
+          const stock = asNumber(p.quantity);
           let status = 'good';
-          if (stock === 0) status = 'out';
+          if (stock <= 0) status = 'out';
           else if (stock < 10) status = 'low';
 
-          // categories is an array from the join
-          const categoryData = p.categories as { name: string }[] | null;
+          // API returns a single category object (or null), not an array
+          const categoryName =
+            p.categories?.name ||
+            (Array.isArray(p.categories) ? p.categories[0]?.name : null) ||
+            'Uncategorized';
+
           return {
             id: p.id,
             name: p.name,
             sku: p.sku || 'N/A',
-            category: categoryData?.[0]?.name || 'Uncategorized',
+            category: categoryName,
             currentStock: stock,
-            reorderLevel: 10, // Default
-            reorderQuantity: 50, // Default
-            price: p.price || 0,
-            cost: 0, // Not in DB
+            reorderLevel: 10,
+            reorderQuantity: 50,
+            price: asNumber(p.price),
+            cost: 0,
             status,
-            supplier: 'Standard Supplier' // Default
+            supplier: 'Standard Supplier',
           };
         });
-        setProducts(mapped);
-      }
+      setProducts(mapped);
     } catch (error) {
       console.error('Error fetching inventory:', error);
     } finally {
@@ -67,8 +60,8 @@ export default function InventoryManagementPage() {
   };
 
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (product.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (product.sku || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = stockFilter === 'all' ||
       (stockFilter === 'low' && product.status === 'low') ||
       (stockFilter === 'out' && product.status === 'out') ||
@@ -78,7 +71,10 @@ export default function InventoryManagementPage() {
 
   const lowStockCount = products.filter(p => p.status === 'low').length;
   const outOfStockCount = products.filter(p => p.status === 'out').length;
-  const totalValue = products.reduce((sum, p) => sum + (p.currentStock * p.price), 0); // Using Price as Value
+  const totalValue = products.reduce(
+    (sum, p) => sum + p.currentStock * asNumber(p.price),
+    0
+  );
 
   const toggleProductSelection = (id: string) => {
     setSelectedProducts(prev =>
@@ -94,12 +90,6 @@ export default function InventoryManagementPage() {
     }
   };
 
-  const handleBulkRestock = () => {
-    // Placeholder for bulk restock logic
-    alert("Bulk restock feature coming soon (requires backend logic).");
-    setSelectedProducts([]);
-  };
-
   const handleExportCSV = () => {
     const csvData = [
       ['SKU', 'Product Name', 'Category', 'Current Stock', 'Price', 'Status'],
@@ -108,7 +98,7 @@ export default function InventoryManagementPage() {
         p.name,
         p.category,
         p.currentStock.toString(),
-        p.price.toFixed(2),
+        money(p.price),
         p.status
       ])
     ];
@@ -146,8 +136,8 @@ export default function InventoryManagementPage() {
                 <p className="text-sm text-gray-600 mb-1">Total Products</p>
                 <p className="text-3xl font-bold text-gray-900">{products.length}</p>
               </div>
-              <div className="w-12 h-12 flex items-center justify-center bg-brand-nude/50 rounded-lg">
-                <i className="ri-stack-line text-2xl text-brand-espresso"></i>
+              <div className="w-12 h-12 flex items-center justify-center bg-store-surface rounded-lg">
+                <i className="ri-stack-line text-2xl text-store-muted"></i>
               </div>
             </div>
           </div>
@@ -176,14 +166,16 @@ export default function InventoryManagementPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
+          <div className="bg-white rounded-xl shadow-sm p-6 overflow-hidden">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm text-gray-600 mb-1">Total Retail Value</p>
-                <p className="text-3xl font-bold text-brand-espresso">GH₵{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 tabular-nums leading-tight break-all">
+                  GH₵{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </p>
               </div>
-              <div className="w-12 h-12 flex items-center justify-center bg-brand-nude/50 rounded-lg">
-                <i className="ri-money-dollar-circle-line text-2xl text-brand-espresso"></i>
+              <div className="w-12 h-12 shrink-0 flex items-center justify-center bg-store-surface rounded-lg">
+                <i className="ri-money-dollar-circle-line text-2xl text-store-primary"></i>
               </div>
             </div>
           </div>
@@ -199,7 +191,7 @@ export default function InventoryManagementPage() {
                   placeholder="Search by product name or SKU..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso text-sm"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary text-sm"
                 />
               </div>
             </div>
@@ -225,7 +217,7 @@ export default function InventoryManagementPage() {
 
               <button
                 onClick={() => setShowImportModal(true)}
-                className="bg-brand-espresso hover:bg-brand-cocoa text-white px-4 py-3 rounded-lg font-semibold transition-colors flex items-center space-x-2 whitespace-nowrap cursor-pointer"
+                className="bg-store-navy hover:bg-store-navy text-white px-4 py-3 rounded-lg font-semibold transition-colors flex items-center space-x-2 whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-upload-line"></i>
                 <span>Import CSV</span>
@@ -242,17 +234,11 @@ export default function InventoryManagementPage() {
           </div>
 
           {selectedProducts.length > 0 && (
-            <div className="mt-4 flex items-center justify-between p-4 bg-brand-nude/30 border border-brand-nude/70 rounded-lg">
-              <p className="text-brand-cocoa font-medium">
+            <div className="mt-4 flex items-center justify-between p-4 bg-store-surface border border-gray-200 rounded-lg">
+              <p className="text-store-ink font-medium">
                 {selectedProducts.length} product{selectedProducts.length > 1 ? 's' : ''} selected
               </p>
               <div className="flex items-center space-x-3">
-                <button
-                  onClick={handleBulkRestock}
-                  className="bg-brand-espresso hover:bg-brand-cocoa text-white px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
-                >
-                  Bulk Restock
-                </button>
                 <button
                   onClick={() => setSelectedProducts([])}
                   className="text-gray-600 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer"
@@ -274,7 +260,7 @@ export default function InventoryManagementPage() {
                       type="checkbox"
                       checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
                       onChange={toggleAllProducts}
-                      className="w-5 h-5 text-brand-espresso rounded cursor-pointer"
+                      className="w-5 h-5 text-store-ink rounded cursor-pointer"
                     />
                   </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Product</th>
@@ -299,7 +285,7 @@ export default function InventoryManagementPage() {
                           type="checkbox"
                           checked={selectedProducts.includes(product.id)}
                           onChange={() => toggleProductSelection(product.id)}
-                          className="w-5 h-5 text-brand-espresso rounded cursor-pointer"
+                          className="w-5 h-5 text-store-ink rounded cursor-pointer"
                         />
                       </td>
                       <td className="px-6 py-4">
@@ -315,12 +301,12 @@ export default function InventoryManagementPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="font-semibold text-gray-900">
-                          GH₵{(product.currentStock * product.price).toFixed(2)}
+                          GH₵{money(product.currentStock * product.price)}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         {product.status === 'good' && (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-brand-nude/50 text-brand-espresso whitespace-nowrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-store-surface text-store-ink whitespace-nowrap">
                             <i className="ri-checkbox-circle-fill mr-1"></i>
                             In Stock
                           </span>
@@ -341,13 +327,13 @@ export default function InventoryManagementPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-2">
                           <button
-                            className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-brand-mauve transition-colors cursor-pointer"
+                            className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-store-ink transition-colors cursor-pointer"
                             title="Edit"
                           >
                             <i className="ri-edit-line text-lg"></i>
                           </button>
                           <button
-                            className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-brand-mauve transition-colors cursor-pointer"
+                            className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-store-ink transition-colors cursor-pointer"
                             title="View Details"
                           >
                             <i className="ri-eye-line text-lg"></i>

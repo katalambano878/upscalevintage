@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import Logo from '@/components/Logo';
+import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
 
 export default function AdminLayout({
   children,
@@ -20,68 +19,44 @@ export default function AdminLayout({
   const [user, setUser] = useState<any>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
 
-  // Module Filtering State
-  const [enabledModules, setEnabledModules] = useState<string[]>([]);
+  // Module Filtering State — null means “not loaded yet” (show all optional modules)
+  const [enabledModules, setEnabledModules] = useState<string[] | null>(null);
 
   useEffect(() => {
     async function checkAuth() {
-      const { data: { session } } = await supabase.auth.getSession();
-
       if (pathname === '/admin/login') {
         setIsLoading(false);
         return;
       }
 
-      if (!session) {
+      try {
+        const me = await apiData<{ user: { id: string; email: string; role: string; full_name?: string } | null }>(
+          '/api/auth/me'
+        );
+        const profile = me.user;
+
+        if (!profile) {
+          router.push('/admin/login');
+          return;
+        }
+
+        if (profile.role !== 'admin' && profile.role !== 'staff') {
+          await apiPost('/api/auth/logout').catch(() => {});
+          router.push('/admin/login?error=unauthorized');
+          return;
+        }
+
+        setUser(profile);
+        setUserRole(profile.role);
+        setIsAuthenticated(true);
+      } catch {
         router.push('/admin/login');
-        return;
+      } finally {
+        setIsLoading(false);
       }
-
-      // Ensure auth cookie is set (in case user already had a session from before)
-      document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax; Secure`;
-
-      // Check user role from profiles table
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single();
-
-      if (profileError || !profile) {
-        console.error('Failed to fetch user profile');
-        router.push('/admin/login');
-        return;
-      }
-
-      // Only allow admin and staff roles
-      if (profile.role !== 'admin' && profile.role !== 'staff') {
-        console.warn('User does not have admin/staff role');
-        document.cookie = 'sb-access-token=; path=/; max-age=0; SameSite=Lax; Secure';
-        await supabase.auth.signOut();
-        router.push('/admin/login?error=unauthorized');
-        return;
-      }
-
-      setUser(session.user);
-      setUserRole(profile.role);
-      setIsAuthenticated(true);
-      setIsLoading(false);
     }
 
     checkAuth();
-
-    // Keep cookie in sync when session refreshes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'TOKEN_REFRESHED' && session) {
-        document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax; Secure`;
-      }
-      if (event === 'SIGNED_OUT') {
-        document.cookie = 'sb-access-token=; path=/; max-age=0; SameSite=Lax; Secure';
-        document.cookie = 'sb-refresh-token=; path=/; max-age=0; SameSite=Lax; Secure';
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, [pathname, router]);
 
   useEffect(() => {
@@ -100,16 +75,17 @@ export default function AdminLayout({
   useEffect(() => {
     async function fetchModules() {
       try {
-        const { data, error } = await supabase.from('store_modules').select('id, enabled');
-        if (error) {
-          console.warn('Error fetching modules:', error);
-          return;
-        }
-        if (data) {
-          setEnabledModules(data.filter((m: any) => m.enabled).map((m: any) => m.id));
+        const data = await apiData<{ modules?: { id: string; enabled: boolean }[] }>(
+          '/api/settings?include=modules'
+        );
+        if (Array.isArray(data.modules)) {
+          setEnabledModules(data.modules.filter((m) => m.enabled).map((m) => m.id));
+        } else {
+          setEnabledModules(null);
         }
       } catch (err) {
         console.warn('Fetch modules failed:', err);
+        setEnabledModules(null);
       }
     }
     fetchModules();
@@ -133,22 +109,21 @@ export default function AdminLayout({
   }, []);
 
   const handleLogout = async () => {
-    // Clear auth cookies set during login
-    document.cookie = 'sb-access-token=; path=/; max-age=0; SameSite=Lax; Secure';
-    document.cookie = 'sb-refresh-token=; path=/; max-age=0; SameSite=Lax; Secure';
-    await supabase.auth.signOut();
+    await apiData('/api/auth/logout', { method: 'POST' }).catch(() => {});
     router.push('/admin/login');
   };
 
+  // Special layout for Login Page (before auth gate)
+  if (pathname === '/admin/login') {
+    return <>{children}</>;
+  }
+
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-brand-cream text-brand-cocoa">
-        <div className="flex flex-col items-center gap-4">
-          <Logo className="h-12 w-auto object-contain opacity-90" />
-          <p className="text-sm font-medium">Loading admin…</p>
-        </div>
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Loading Admin...</div>;
+  }
+
+  if (!isAuthenticated) {
+    return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">Redirecting…</div>;
   }
 
   const menuItems = [
@@ -165,6 +140,11 @@ export default function AdminLayout({
       badge: ''
     },
     {
+      title: 'Payment Reconcile',
+      icon: 'ri-refund-2-line',
+      path: '/admin/payments/reconcile',
+    },
+    {
       title: 'POS System',
       icon: 'ri-store-3-line',
       path: '/admin/pos'
@@ -173,6 +153,11 @@ export default function AdminLayout({
       title: 'Products',
       icon: 'ri-box-3-line',
       path: '/admin/products'
+    },
+    {
+      title: 'Sale pricing',
+      icon: 'ri-price-tag-2-line',
+      path: '/admin/sales'
     },
     {
       title: 'Categories',
@@ -235,20 +220,15 @@ export default function AdminLayout({
     },
   ];
 
-  const visibleMenuItems = menuItems.filter(item => {
-    // @ts-ignore
-    if (!item.moduleId) return true;
-    // @ts-ignore
-    return enabledModules.includes(item.moduleId);
+  const visibleMenuItems = menuItems.filter((item) => {
+    const moduleId = (item as { moduleId?: string }).moduleId;
+    if (!moduleId) return true;
+    if (enabledModules === null) return true;
+    return enabledModules.includes(moduleId);
   });
 
-  // Special layout for Login Page
-  if (pathname === '/admin/login') {
-    return <>{children}</>;
-  }
-
   return (
-    <div className="min-h-screen bg-brand-cream">
+    <div className="min-h-screen bg-gray-50">
 
       {/* Mobile Overlay */}
       {isSidebarOpen && (
@@ -260,7 +240,7 @@ export default function AdminLayout({
 
       {/* Sidebar - Mobile: Transform / Desktop: Width transition */}
       <aside
-        className={`fixed top-0 left-0 z-40 h-screen bg-brand-espresso border-r border-brand-cocoa/20 transition-all duration-300
+        className={`fixed top-0 left-0 z-40 h-screen bg-white border-r border-gray-200 transition-all duration-300
           w-64
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
           ${isSidebarOpen ? 'lg:w-64' : 'lg:w-0 lg:overflow-hidden'}
@@ -268,11 +248,9 @@ export default function AdminLayout({
         `}
       >
         <div className="h-full px-4 py-6 overflow-y-auto">
-          <Link href="/admin" className="flex items-center gap-3 mb-8 px-2 cursor-pointer group">
-            <Logo className="h-10 w-auto max-w-[140px] object-contain brightness-0 invert opacity-95 group-hover:opacity-100 transition-opacity" />
-            <span className="text-[10px] font-semibold tracking-[0.2em] text-brand-nude/80 uppercase shrink-0">
-              Admin
-            </span>
+          <Link href="/admin" className="flex items-center mb-8 px-2 cursor-pointer">
+            <span className="text-xl font-['Pacifico'] text-store-ink">{process.env.NEXT_PUBLIC_SITE_NAME || 'Mamator'}</span>
+            <span className="ml-3 text-sm font-semibold text-gray-500">ADMIN</span>
           </Link>
 
           <nav className="space-y-1">
@@ -284,8 +262,8 @@ export default function AdminLayout({
                   href={item.path}
                   onClick={() => window.innerWidth < 1024 && setIsSidebarOpen(false)} // Close on mobile click
                   className={`flex items-center justify-between px-4 py-3 rounded-lg transition-colors cursor-pointer ${isActive
-                    ? 'bg-brand-champagne/25 text-brand-nude font-semibold'
-                    : 'text-brand-nude/75 hover:bg-white/10 hover:text-brand-nude'
+                    ? 'bg-store-surface text-store-ink font-semibold'
+                    : 'text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   <div className="flex items-center space-x-3">
@@ -302,12 +280,12 @@ export default function AdminLayout({
             })}
           </nav>
 
-          <div className="mt-8 pt-8 border-t border-white/15">
+          <div className="mt-8 pt-8 border-t border-gray-200">
             <Link
               href="/"
               target="_blank"
               onClick={() => window.innerWidth < 1024 && setIsSidebarOpen(false)}
-              className="flex items-center space-x-3 px-4 py-3 text-brand-nude/75 hover:bg-white/10 hover:text-brand-nude rounded-lg transition-colors cursor-pointer"
+              className="flex items-center space-x-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
             >
               <i className="ri-external-link-line text-xl w-5 h-5 flex items-center justify-center"></i>
               <span>View Store</span>
@@ -318,17 +296,33 @@ export default function AdminLayout({
 
       {/* Main Content */}
       <div className={`transition-all duration-300 ml-0 ${isSidebarOpen ? 'lg:ml-64' : 'lg:ml-0'}`}>
-        <header className="bg-white/90 backdrop-blur-sm border-b border-brand-nude sticky top-0 z-30 shadow-sm">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
           <div className="px-4 py-4 lg:px-6 flex items-center justify-between">
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="w-10 h-10 flex items-center justify-center text-brand-cocoa hover:text-brand-espresso hover:bg-brand-nude/40 rounded-lg transition-colors cursor-pointer"
-            >
-              <i className={`${isSidebarOpen ? 'ri-menu-fold-line' : 'ri-menu-unfold-line'} text-xl`}></i>
-            </button>
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="w-10 h-10 shrink-0 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                aria-label={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              >
+                <i className={`${isSidebarOpen ? 'ri-menu-fold-line' : 'ri-menu-unfold-line'} text-xl`}></i>
+              </button>
+              <Link
+                href="/admin/sales"
+                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg text-sm font-semibold border transition-colors shrink-0 ${
+                  pathname === '/admin/sales'
+                    ? 'bg-store-navy text-white border-store-navy'
+                    : 'bg-white text-store-ink border-gray-200 hover:bg-store-surface'
+                }`}
+                title="Turn store-wide sale pricing on or off"
+              >
+                <i className="ri-price-tag-2-line text-lg" aria-hidden />
+                <span className="sm:hidden">Sale</span>
+                <span className="hidden sm:inline">Store-wide sale</span>
+              </Link>
+            </div>
 
             <div className="flex items-center space-x-2 lg:space-x-4">
-              <button className="relative w-10 h-10 flex items-center justify-center text-brand-cocoa hover:text-brand-espresso hover:bg-brand-nude/40 rounded-lg transition-colors cursor-pointer">
+              <button className="relative w-10 h-10 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer">
                 <i className="ri-notification-3-line text-xl"></i>
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
               </button>
@@ -336,14 +330,14 @@ export default function AdminLayout({
               <div className="relative user-menu-container">
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center space-x-2 lg:space-x-3 px-2 lg:px-3 py-2 hover:bg-brand-nude/30 rounded-lg transition-colors cursor-pointer"
+                  className="flex items-center space-x-2 lg:space-x-3 px-2 lg:px-3 py-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
                 >
-                  <div className="w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center bg-brand-nude text-brand-espresso rounded-full font-semibold">
+                  <div className="w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center bg-store-surface text-store-ink rounded-full font-semibold">
                     {user?.email?.charAt(0).toUpperCase() || 'A'}
                   </div>
                   <div className="text-left hidden md:block">
-                    <p className="text-sm font-semibold text-brand-espresso capitalize">{userRole || 'Admin'}</p>
-                    <p className="text-xs text-brand-cocoa/70 max-w-[100px] truncate">{user?.email}</p>
+                    <p className="text-sm font-semibold text-gray-900 capitalize">{userRole || 'Admin'}</p>
+                    <p className="text-xs text-gray-500 max-w-[100px] truncate">{user?.email}</p>
                   </div>
                   <i className="ri-arrow-down-s-line text-gray-600"></i>
                 </button>

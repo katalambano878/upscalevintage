@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { query } from '@/lib/db';
 import { extractFromZip } from '@/lib/import/zip-extractor';
 import { parseCSV, type ValidationWarning } from '@/lib/import/csv-parser';
 import { uploadProductImages, collectReferencedImageNames } from '@/lib/import/image-processor';
@@ -219,23 +219,27 @@ export async function POST(request: Request) {
       });
 
       try {
-        await supabaseAdmin.from('audit_logs').insert({
-          user_id: auth.user.id,
-          action: 'product_import',
-          entity_type: 'import',
-          entity_id: null,
-          details: {
-            productsCreated: created,
-            variantsCreated: variants,
-            imagesUploaded: imageUrlMap.size,
-            errors: totalErrors,
-            warnings: warnings.length,
-            skipped,
-            duration,
-            updateExisting,
-          },
-          ip_address: getClientIdentifier(request),
-        });
+        await query(
+          `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address)
+           VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6)`,
+          [
+            auth.user.id,
+            'product_import',
+            'import',
+            null,
+            JSON.stringify({
+              productsCreated: created,
+              variantsCreated: variants,
+              imagesUploaded: imageUrlMap.size,
+              errors: totalErrors,
+              warnings: warnings.length,
+              skipped,
+              duration,
+              updateExisting,
+            }),
+            getClientIdentifier(request),
+          ]
+        );
       } catch (_) {}
 
       controller.close();

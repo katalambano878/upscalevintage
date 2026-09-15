@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { apiGet } from '@/lib/client/api';
 import ProductCard, { type ColorVariant, getColorHex } from '@/components/ProductCard';
 import ProductCardSkeleton from '@/components/skeletons/ProductCardSkeleton';
 import AnimatedSection, { AnimatedGrid } from '@/components/AnimatedSection';
@@ -95,39 +95,24 @@ export default function HomeClient() {
   useEffect(() => {
     async function fetchHomeData() {
       const [productsResult, categoriesResult] = await Promise.all([
-        supabase
-          .from('products')
-          .select('*, product_variants(*), product_images(*)')
-          .eq('status', 'active')
-          .eq('featured', true)
-          .order('created_at', { ascending: false })
-          .limit(8),
-        supabase
-          .from('categories')
-          .select('id, name, slug, description, image_url')
-          .eq('status', 'active')
-          .is('parent_id', null)
-          .contains('metadata', { featured: true })
-          .order('position', { ascending: true }),
+        apiGet<unknown[]>('/api/storefront/products?featured=true&limit=8'),
+        fetch('/api/storefront/categories').then((r) => (r.ok ? r.json() : [])),
       ]);
 
       if (productsResult.error) {
-        const err = productsResult.error as { message?: string; code?: string };
-        if (err?.code !== 'PGRST205') {
-          console.error('Error fetching featured products:', err?.message);
-        }
+        console.error('Error fetching featured products:', productsResult.error.message);
       } else {
-        setFeaturedProducts(productsResult.data || []);
+        setFeaturedProducts((productsResult.data as unknown[]) || []);
       }
       setProductsLoading(false);
 
-      if (categoriesResult.error) {
-        const err = categoriesResult.error as { message?: string; code?: string };
-        if (err?.code !== 'PGRST205') {
-          console.error('Error fetching categories:', err?.message);
-        }
+      if (!Array.isArray(categoriesResult)) {
+        console.error('Error fetching categories');
       } else {
-        setCategories(categoriesResult.data || []);
+        const featuredCats = (categoriesResult as StoreCategory[]).filter(
+          (c) => (c as StoreCategory & { metadata?: { featured?: boolean } }).metadata?.featured !== false
+        );
+        setCategories(featuredCats.length ? featuredCats : (categoriesResult as StoreCategory[]));
       }
       setCategoriesLoading(false);
     }
