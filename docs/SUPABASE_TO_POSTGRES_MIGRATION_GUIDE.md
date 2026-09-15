@@ -73,17 +73,25 @@ SMS: `MOOLRE_SMS_API_KEY` (optional). Email: `RESEND_API_KEY` (optional).
 
 ## Deploy (Coolify)
 
-There is **no Coolify app** named upscale yet. `sudo fleet` cannot create one. Owner must add `upscalevintage-app` (or staging) in Coolify pointing at this repo, port 3000, then set:
+Production app: **upscalevintage-app** (`qfjf1dcflfxxbuacdq0psvjs`), port 3000, nixpacks, branch `main`.
 
-- `DATABASE_URL` (pooler URL from the secret file)
+FQDN: `https://upscalevintage.shop`, `https://www.upscalevintage.shop`, `https://upscalevintage.169-58-8-203.sslip.io`
+
+Env (from `/data/fleet/secrets/store_upscalevintage.env`):
+
+- `DATABASE_URL` (PgBouncer)
 - `AUTH_SECRET`
-- `NEXT_PUBLIC_APP_URL`
-- `UPLOAD_DIR=/var/www/upscalevintage/uploads` (persistent volume)
-- Payment/SMS/email keys when ready
+- `NEXT_PUBLIC_APP_URL=https://upscalevintage.shop`
+- `UPLOAD_DIR=/var/www/upscalevintage/uploads`
+- `MOOLRE_CALLBACK_URL=https://upscalevintage.shop/api/payment/moolre/callback`
 
-Uploads directory already created: `/var/www/upscalevintage/uploads`
+Uploads volume: host `/data/fleet/uploads/upscalevintage` → `/var/www/upscalevintage/uploads`
 
-Then: `sudo fleet deploy upscalevintage-app`
+```bash
+sudo fleet deploy upscalevintage-app
+```
+
+Set Moolre live keys (`MOOLRE_API_USER`, `MOOLRE_API_PUBKEY`, `MOOLRE_ACCOUNT_NUMBER`, `MOOLRE_CALLBACK_SECRET`) in Coolify when ready. Dashboard callback URL: `https://upscalevintage.shop/api/payment/moolre/callback`.
 
 ## Independence check
 
@@ -96,6 +104,6 @@ Runtime `app/`, `components/`, `context/`, `hooks/`, `lib/` have **no** `@supaba
 | Schema applied on VPS | Pass |
 | Grants to `store_upscalevintage` | Pass |
 | Runtime Supabase SDK removed | Pass |
-| Coolify app running | Blocked — app does not exist |
-| Browser / checkout / admin login | Blocked — no deployed URL |
+| Coolify app running | Pass — `upscalevintage-app` healthy |
+| `https://upscalevintage.shop/api/health` | Pass — database up, config ok |
 | Source data restore | N/A — no source dump |
