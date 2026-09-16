@@ -33,7 +33,7 @@ export default async function CategoriesPage() {
     const style = palette[i % palette.length];
     return {
       ...c,
-      image: c.image_url || 'https://via.placeholder.com/600x400?text=Category',
+      image: c.image_url || `/api/uploads/categories/${c.slug}.png`,
       color: style.color,
       icon: style.icon,
       productCount: 'Browse',
