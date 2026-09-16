@@ -87,8 +87,8 @@ export default function CartPage() {
                   <div className="bg-white/90 rounded-2xl shadow-luxury border border-brand-nude/50 p-6 overflow-hidden">
                     <div className="flex items-center justify-between mb-6">
                       <h2 className="font-display text-2xl font-semibold text-brand-espresso">Cart Items ({cartItems.length})</h2>
-                      {savings > 0 && (
-                        <span className="text-brand-mauve font-semibold">You save GH₵{savings.toFixed(2)}</span>
+                      {couponDiscount > 0 && (
+                        <span className="text-brand-mauve font-semibold">You save GH₵{couponDiscount.toFixed(2)}</span>
                       )}
                     </div>
 
