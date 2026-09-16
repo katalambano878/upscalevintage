@@ -80,17 +80,23 @@ export default function ContactInfoCards(props: ContactInfoCardsProps) {
       {cards.map((card) => {
         const inner = (
           <>
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#eff6ff] text-[#1a56db] mb-5">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-nude/70 text-brand-espresso mb-5">
               <i className={`${card.icon} text-xl`} aria-hidden />
             </span>
-            <h3 className="text-base font-bold text-gray-900 mb-2">{card.title}</h3>
-            <p className="text-[15px] font-medium text-[#1a56db] break-words">{card.detail}</p>
-            <p className="mt-2 text-sm text-gray-500">{card.subtext}</p>
+            <h3 className="text-base font-sans font-semibold text-brand-espresso mb-2 tracking-normal [word-spacing:0.06em]">
+              {card.title}
+            </h3>
+            <p className="text-[15px] font-sans font-medium text-brand-cocoa break-words tracking-normal [word-spacing:0.06em]">
+              {card.detail}
+            </p>
+            <p className="mt-2 text-sm font-sans text-brand-cocoa/60 tracking-normal [word-spacing:0.06em]">
+              {card.subtext}
+            </p>
           </>
         );
 
         const className =
-          'block h-full rounded-xl border border-gray-200 bg-white p-6 md:p-7 text-left transition-shadow hover:shadow-md';
+          'block h-full rounded-xl border border-brand-nude/70 bg-white p-6 md:p-7 text-left transition-shadow hover:shadow-md hover:border-brand-mauve/40';
 
         if (card.href) {
           return (
