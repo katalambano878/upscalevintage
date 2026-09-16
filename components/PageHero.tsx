@@ -1,5 +1,4 @@
-import React from 'react';
-import Image from 'next/image';
+import { HERO_IMAGE_VERSION, HERO_IMAGES } from '@/lib/brand';
 
 interface PageHeroProps {
   title: string;
@@ -7,43 +6,45 @@ interface PageHeroProps {
   backgroundImage?: string;
 }
 
+const LEGACY_HERO_IMAGES: Record<string, string> = {
+  '/hero-fashion-bg.jpg': HERO_IMAGES[0],
+  '/hero-tee-graphic.jpg': HERO_IMAGES[2],
+};
+
+function resolveHeroSrc(backgroundImage?: string) {
+  if (backgroundImage && LEGACY_HERO_IMAGES[backgroundImage]) {
+    return LEGACY_HERO_IMAGES[backgroundImage];
+  }
+  if (backgroundImage?.startsWith('/hero/')) {
+    return backgroundImage;
+  }
+  return HERO_IMAGES[0];
+}
+
 export default function PageHero({ title, subtitle, backgroundImage }: PageHeroProps) {
+  const src = resolveHeroSrc(backgroundImage);
+
   return (
-    <div
-      className={`relative overflow-hidden flex items-center justify-center min-h-[65vh] md:min-h-[55vh] ${
-        !backgroundImage ? 'bg-brand-cream' : ''
-      }`}
-    >
-      {backgroundImage ? (
-        <>
-          <Image
-            src={backgroundImage}
-            alt={title}
-            fill
-            className="object-cover"
-            priority
-            sizes="100vw"
-            quality={80}
-          />
-          <div className="absolute inset-0 bg-brand-espresso/40" />
-        </>
-      ) : (
-        <>
-          <div className="absolute inset-0 bg-hero-slide-2" />
-          <div className="hero-orb w-80 h-80 -top-20 right-0 bg-brand-mauve/20" />
-          <div className="hero-orb w-64 h-64 bottom-0 left-0 bg-brand-champagne/25" />
-        </>
-      )}
+    <div className="relative overflow-hidden flex items-center justify-center min-h-[65vh] md:min-h-[55vh] bg-brand-espresso">
+      <img
+        src={`${src}?v=${HERO_IMAGE_VERSION}`}
+        alt=""
+        width={1024}
+        height={576}
+        decoding="async"
+        className="hero-slide-media absolute inset-0 w-full h-full"
+      />
+      <div className="absolute inset-0 bg-black/35 pointer-events-none" aria-hidden />
 
       <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-24 text-center z-10 flex flex-col items-center">
-        <span className="inline-block py-1.5 px-4 mb-5 text-brand-mauve text-xs sm:text-sm font-medium tracking-normal border border-brand-mauve/30 rounded-full bg-white/70">
+        <span className="inline-block py-1.5 px-4 mb-5 text-white text-xs sm:text-sm font-sans font-medium tracking-normal [word-spacing:0.08em] border border-white/25 rounded-full bg-white/10 backdrop-blur-md">
           Upscale Vintage
         </span>
-        <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-semibold text-brand-espresso mb-6 leading-[1.08] tracking-tight">
+        <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-semibold text-white mb-6 leading-[1.15] tracking-normal [word-spacing:0.08em]">
           {title}
         </h1>
         {subtitle && (
-          <p className="brand-body-lg max-w-2xl mx-auto text-center">
+          <p className="font-sans text-lg sm:text-xl text-white/90 leading-relaxed max-w-2xl mx-auto text-center tracking-normal [word-spacing:0.06em]">
             {subtitle}
           </p>
         )}

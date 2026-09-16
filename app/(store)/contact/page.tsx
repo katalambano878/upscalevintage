@@ -97,7 +97,7 @@ function ContactForm() {
       <PageHero
         title="Get In Touch"
         subtitle="Have a question about our collections or your order? We’re here to help."
-        backgroundImage="/hero-tee-graphic.jpg"
+        backgroundImage="/hero/lifestyle-hero-3.png"
       />
 
       <div className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10 pb-4">

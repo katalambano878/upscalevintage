@@ -179,7 +179,7 @@ function ShopContent() {
       <PageHero
         title="Shop All Products"
         subtitle="Shop graphic, plain, polo, and performance t-shirts for men and women."
-        backgroundImage="/hero-fashion-bg.jpg"
+        backgroundImage="/hero/lifestyle-hero-1.png"
       />
 
       {/* Mobile Filter Toggle */}

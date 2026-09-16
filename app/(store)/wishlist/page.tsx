@@ -32,7 +32,7 @@ export default function WishlistPage() {
 
   return (
     <main className="min-h-screen bg-brand-cream">
-      <PageHero title="My Wishlist" />
+      <PageHero title="My Wishlist" backgroundImage="/hero/lifestyle-hero-1.png" />
 
       <section className="py-8 bg-white/60 border-b border-brand-nude/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
