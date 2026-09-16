@@ -9,10 +9,13 @@ export const TAGLINE =
 
 /** Default on-page body copy tone (use with class `brand-body`) */
 export const BRAND_INTRO =
-  'Upscale Vintage is your trending lifestyle destination and import plug: what is hot right now, plus the sourced finds you will not see everywhere. Open to every shopper who wants quality, style, and curated picks.';
+  'Upscale Vintage is a curated lifestyle and retail destination, bringing together fashion, accessories, home essentials and carefully sourced imports.';
 
 export const BRAND_INTRO_SECONDARY =
-  'From fashion and bags to home appliances, accessories, and special imports, we track trending lifestyle so you stay ahead of the curve.';
+  'We are passionate about discovering quality pieces that combine style, functionality and value — from statement fashion and bags to home appliances and everyday lifestyle essentials.';
+
+export const BRAND_INTRO_TERTIARY =
+  'With a focus on quality, trusted sourcing and exceptional finds, we make it easier to discover products you’ll love, all in one place.';
 export const SITE_URL_DEFAULT = 'https://upscalevintage.shop';
 export const LOGO_PATH = '/logo.png';
 export const OG_IMAGE_PATH = '/og-image.png';
@@ -25,7 +28,9 @@ export const WHATSAPP_LINK = 'https://wa.me/233545035799';
 
 export const INSTAGRAM_HANDLE = '@upscale_vintage12';
 export const INSTAGRAM_URL = 'https://instagram.com/upscale_vintage12';
-export const SNAPCHAT_HANDLES = ['@limatlux', '@upscalevintage2'];
+export const SNAPCHAT_HANDLE = 'upscalevintage2';
+export const SNAPCHAT_URL = `https://www.snapchat.com/add/${SNAPCHAT_HANDLE}`;
+export const SNAPCHAT_HANDLES = ['@upscalevintage2'];
 
 export const SUPPORT_EMAIL = 'hello@upscalevintage.com';
 export const ADMIN_EMAIL_DEFAULT = 'hello@upscalevintage.com';

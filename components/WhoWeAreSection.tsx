@@ -3,7 +3,14 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AnimatedSection from './AnimatedSection';
-import { APP_TITLE, BRAND_INTRO_SECONDARY } from '@/lib/brand';
+import {
+  APP_TITLE,
+  BRAND_INTRO,
+  BRAND_INTRO_SECONDARY,
+  BRAND_INTRO_TERTIARY,
+  SNAPCHAT_HANDLE,
+  SNAPCHAT_URL,
+} from '@/lib/brand';
 
 const MOCKUP_IMAGES = [
   '/about-mockup-1.png',
@@ -33,14 +40,20 @@ export default function WhoWeAreSection() {
               Who We Are
             </h2>
             <div className="space-y-5 brand-body">
-              <p>
-                <strong className="font-semibold text-brand-espresso">{APP_TITLE}</strong> is your{' '}
-                <strong className="font-semibold text-brand-espresso">trending lifestyle destination</strong> and{' '}
-                <strong className="font-semibold text-brand-espresso">import plug</strong>. Two roles, one stop: what is
-                hot right now, and the sourced arrivals you will not find everywhere. We welcome every shopper who wants
-                style, quality, and curated picks without labels.
-              </p>
+              <p>{BRAND_INTRO}</p>
               <p>{BRAND_INTRO_SECONDARY}</p>
+              <p>{BRAND_INTRO_TERTIARY}</p>
+              <p className="text-brand-cocoa/90">
+                Snapchat:{' '}
+                <a
+                  href={SNAPCHAT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-brand-espresso hover:text-brand-mauve underline underline-offset-2"
+                >
+                  {SNAPCHAT_HANDLE}
+                </a>
+              </p>
               <div className="pt-2">
                 <Link
                   href="/about"
