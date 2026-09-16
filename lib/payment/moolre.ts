@@ -165,14 +165,15 @@ export async function fetchMoolrePaymentStatus(externalRef: string): Promise<Moo
       signal: controller.signal,
     });
 
-    const contentType = checkResponse.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      const text = await checkResponse.text();
+    const text = await checkResponse.text();
+    let checkResult: Record<string, unknown>;
+    try {
+      checkResult = JSON.parse(text) as Record<string, unknown>;
+    } catch {
       console.warn('[Moolre] non-JSON status response:', checkResponse.status, text.slice(0, 200));
       return { verified: false, status: `http_${checkResponse.status}` };
     }
 
-    const checkResult = (await checkResponse.json()) as Record<string, unknown>;
     const parsed = parseTxPayload(checkResult);
     return { ...parsed, raw: checkResult };
   } catch (err) {
