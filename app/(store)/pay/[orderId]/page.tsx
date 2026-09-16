@@ -83,7 +83,7 @@ export default function PaymentPage() {
 
       const paymentResult = await readJsonOrThrow<{ success?: boolean; message?: string; url?: string }>(paymentRes);
 
-      if (!paymentResult.success) {
+      if (!paymentResult.success || !paymentResult.url) {
         throw new Error(paymentResult.message || 'Payment initialization failed');
       }
 

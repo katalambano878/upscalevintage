@@ -381,7 +381,7 @@ export default function POSPage() {
 
                 const paymentResult = await readJsonOrThrow<{ success?: boolean; message?: string; url?: string }>(paymentRes);
 
-                if (!paymentResult.success) {
+                if (!paymentResult.success || !paymentResult.url) {
                     throw new Error(paymentResult.message || 'Failed to initiate Mobile Money payment');
                 }
 
