@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { apiData, apiPost, apiPatch } from '@/lib/client/api';
+import { apiData, apiPatch } from '@/lib/client/api';
 import { useRouter } from 'next/navigation';
 import { buildProductSeo, slugifyProduct } from '@/lib/product-seo';
 
@@ -69,14 +69,15 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         { name: 'Gold', hex: '#D4AF37' },
         { name: 'Silver', hex: '#C0C0C0' },
     ];
-    const sizePresets = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+    const sizePresets = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'One Size'];
+    const numericSizePresets = ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45'];
 
     // Parse existing variants to extract unique colors and sizes
     const existingVariants = (initialData?.product_variants || []).map((v: any) => ({
         ...v,
         stock: v.stock ?? v.quantity ?? 0,
         color: v.color ?? v.option2 ?? '',
-        size: v.name || ''
+        size: v.option1 || v.size || v.name || ''
     }));
 
     const [selectedColors, setSelectedColors] = useState<{ name: string; hex: string }[]>(() => {
@@ -222,7 +223,13 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const [seoTitle, setSeoTitle] = useState(initialData?.seo_title || '');
     const [metaDescription, setMetaDescription] = useState(initialData?.seo_description || '');
     const [urlSlug, setUrlSlug] = useState(initialData?.slug || '');
-    const [keywords, setKeywords] = useState(initialData?.tags?.join(', ') || '');
+    const [keywords, setKeywords] = useState(
+        Array.isArray(initialData?.tags) ? initialData.tags.join(', ') : ''
+    );
+    const [slugManual, setSlugManual] = useState(Boolean(isEditMode && initialData?.slug));
+    const [seoTitleManual, setSeoTitleManual] = useState(Boolean(isEditMode && initialData?.seo_title));
+    const [seoDescManual, setSeoDescManual] = useState(Boolean(isEditMode && initialData?.seo_description));
+    const [keywordsManual, setKeywordsManual] = useState(Boolean(isEditMode && initialData?.tags?.length));
 
     const tabs = [
         { id: 'general', label: 'General', icon: 'ri-information-line' },
@@ -251,9 +258,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         fetchCategories();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Auto-generate slug + SEO when empty (new products / blank SEO fields)
-    useEffect(() => {
-        if (!productName) return;
+    const applyGeneratedSeo = (force = false) => {
+        if (!productName.trim()) return;
         const categoryName = categories.find((c) => c.id === categoryId)?.name || '';
         const seo = buildProductSeo({
             name: productName,
@@ -261,11 +267,22 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             categoryName,
             siteName: process.env.NEXT_PUBLIC_SITE_NAME || 'Upscale Vintage',
         });
-        if (!isEditMode && !urlSlug) setUrlSlug(seo.slug || slugifyProduct(productName));
-        if (!seoTitle) setSeoTitle(seo.seo_title);
-        if (!metaDescription) setMetaDescription(seo.seo_description);
-        if (!keywords) setKeywords(seo.tags.join(', '));
-    }, [productName, categoryId, categories]); // eslint-disable-line react-hooks/exhaustive-deps
+        if (force || !slugManual) setUrlSlug(seo.slug);
+        if (force || !seoTitleManual) setSeoTitle(seo.seo_title);
+        if (force || !seoDescManual) setMetaDescription(seo.seo_description);
+        if (force || !keywordsManual) setKeywords(seo.tags.join(', '));
+        if (force) {
+            setSlugManual(false);
+            setSeoTitleManual(false);
+            setSeoDescManual(false);
+            setKeywordsManual(false);
+        }
+    };
+
+    // Keep slug + SEO in sync with the name until the merchant edits those fields.
+    useEffect(() => {
+        applyGeneratedSeo(false);
+    }, [productName, categoryId, categories, description]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Auto-generate SKU for new products
     useEffect(() => {
@@ -321,10 +338,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 : parseInt(stock) || 0;
 
             const salePriceNum = salePrice.trim() ? parseFloat(salePrice) : NaN;
-            const nextSlug = (urlSlug || productName)
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, '-')
-                .replace(/(^-|-$)+/g, '');
+            const nextSlug = slugifyProduct(urlSlug || productName);
             if (!nextSlug) {
                 throw new Error('Add a product name so a URL slug can be generated.');
             }
@@ -481,6 +495,34 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary"
                                     placeholder="Enter product name"
                                 />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                    URL slug
+                                </label>
+                                <div className="flex items-center min-w-0">
+                                    <span className="hidden sm:inline text-gray-600 bg-gray-100 px-3 py-3 border-2 border-r-0 border-gray-300 rounded-l-lg whitespace-nowrap text-sm">
+                                        /product/
+                                    </span>
+                                    <input
+                                        type="text"
+                                        value={urlSlug}
+                                        onChange={(e) => {
+                                            setSlugManual(true);
+                                            setUrlSlug(slugifyProduct(e.target.value));
+                                        }}
+                                        autoCapitalize="none"
+                                        autoCorrect="off"
+                                        spellCheck={false}
+                                        className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg sm:rounded-l-none sm:rounded-r-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary font-mono text-sm"
+                                        placeholder="navy-linen-shirt"
+                                    />
+                                </div>
+                                <p className="text-sm text-gray-500 mt-2">
+                                    Live URL: <span className="font-mono text-gray-800">/product/{urlSlug || '…'}</span>
+                                    {!slugManual && ' · updates from the product name'}
+                                </p>
                             </div>
 
                             <div>
@@ -761,6 +803,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         return (
                                             <button
                                                 key={color.name}
+                                                type="button"
                                                 onClick={() => toggleColor(color)}
                                                 className={`flex items-center space-x-2 px-3 py-2 rounded-lg border-2 transition-all text-sm font-medium ${isSelected
                                                         ? 'border-store-muted bg-store-surface ring-1 ring-store-primary'
@@ -834,12 +877,13 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 </h4>
                                 <p className="text-xs text-gray-500 mb-4">Click sizes to add/remove. Use custom for volumes (100ml), weights, etc.</p>
 
-                                <div className="flex flex-wrap gap-2 mb-4">
+                                <div className="flex flex-wrap gap-2 mb-3">
                                     {sizePresets.map(size => {
                                         const isSelected = selectedSizes.includes(size);
                                         return (
                                             <button
                                                 key={size}
+                                                type="button"
                                                 onClick={() => toggleSize(size)}
                                                 className={`px-5 py-2.5 rounded-lg border-2 font-semibold text-sm transition-all ${isSelected
                                                         ? 'border-store-muted bg-store-surface text-store-ink ring-1 ring-store-primary'
@@ -848,6 +892,25 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             >
                                                 {size}
                                                 {isSelected && <i className="ri-check-line ml-1.5 text-store-muted"></i>}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-xs text-gray-500 mb-2">Shoe / numeric sizes</p>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {numericSizePresets.map(size => {
+                                        const isSelected = selectedSizes.includes(size);
+                                        return (
+                                            <button
+                                                key={size}
+                                                type="button"
+                                                onClick={() => toggleSize(size)}
+                                                className={`px-4 py-2 rounded-lg border-2 font-semibold text-sm transition-all ${isSelected
+                                                        ? 'border-store-muted bg-store-surface text-store-ink ring-1 ring-store-primary'
+                                                        : 'border-gray-200 hover:border-gray-300 bg-white text-gray-700'
+                                                    }`}
+                                            >
+                                                {size}
                                             </button>
                                         );
                                     })}
@@ -1082,60 +1145,96 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
                     {activeTab === 'seo' && (
                         <div className="space-y-6 max-w-3xl">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-900 mb-1">Search Engine Optimization</h3>
-                                <p className="text-gray-600">Optimize how this product appears in search results</p>
+                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900 mb-1">Search Engine Optimization</h3>
+                                    <p className="text-gray-600">These fields update from the product name until you edit them.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => applyGeneratedSeo(true)}
+                                    className="px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 whitespace-nowrap"
+                                >
+                                    <i className="ri-refresh-line mr-1"></i>
+                                    Rebuild from name
+                                </button>
+                            </div>
+
+                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                                <p className="text-xs text-gray-500 mb-1">Google preview</p>
+                                <p className="text-[#1a0dab] text-lg leading-snug">{seoTitle || 'Page title'}</p>
+                                <p className="text-sm text-green-800 font-mono truncate">
+                                    upscalevintage.shop/product/{urlSlug || '…'}
+                                </p>
+                                <p className="text-sm text-gray-600 mt-1">{metaDescription || 'Meta description'}</p>
                             </div>
 
                             <div>
                                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Page Title
+                                    Page title
                                 </label>
                                 <input
                                     type="text"
                                     value={seoTitle}
-                                    onChange={(e) => setSeoTitle(e.target.value)}
+                                    onChange={(e) => {
+                                        setSeoTitleManual(true);
+                                        setSeoTitle(e.target.value);
+                                    }}
+                                    maxLength={70}
                                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary"
-                                    placeholder="Seo friendly title"
+                                    placeholder="Product name | Upscale Vintage"
                                 />
-                                <p className="text-sm text-gray-500 mt-2">60 characters recommended</p>
+                                <p className={`text-sm mt-2 ${seoTitle.length > 60 ? 'text-amber-700' : 'text-gray-500'}`}>
+                                    {seoTitle.length}/60 characters recommended
+                                </p>
                             </div>
 
                             <div>
                                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Meta Description
+                                    Meta description
                                 </label>
                                 <textarea
                                     rows={3}
-                                    maxLength={500}
+                                    maxLength={200}
                                     value={metaDescription}
-                                    onChange={(e) => setMetaDescription(e.target.value)}
+                                    onChange={(e) => {
+                                        setSeoDescManual(true);
+                                        setMetaDescription(e.target.value);
+                                    }}
                                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary resize-none"
-                                    placeholder="Seo friendly description"
+                                    placeholder="Shop this product at Upscale Vintage. Fast delivery across Ghana."
                                 />
-                                <p className="text-sm text-gray-500 mt-2">160 characters recommended</p>
+                                <p className={`text-sm mt-2 ${metaDescription.length > 160 ? 'text-amber-700' : 'text-gray-500'}`}>
+                                    {metaDescription.length}/160 characters recommended
+                                </p>
                             </div>
 
                             <div>
                                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    URL Slug
+                                    URL slug
                                 </label>
                                 <div className="flex items-center min-w-0">
-                                    <span className="text-gray-600 bg-gray-100 px-4 py-3 border-2 border-r-0 border-gray-300 rounded-l-lg whitespace-nowrap">
-                                        store.com/product/
+                                    <span className="text-gray-600 bg-gray-100 px-4 py-3 border-2 border-r-0 border-gray-300 rounded-l-lg whitespace-nowrap text-sm">
+                                        /product/
                                     </span>
                                     <input
                                         type="text"
                                         value={urlSlug}
-                                        onChange={(e) => setUrlSlug(e.target.value)}
+                                        onChange={(e) => {
+                                            setSlugManual(true);
+                                            setUrlSlug(slugifyProduct(e.target.value));
+                                        }}
                                         autoCapitalize="none"
                                         autoCorrect="off"
                                         spellCheck={false}
-                                        className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary"
+                                        className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary font-mono"
                                         placeholder="product-slug"
                                     />
                                 </div>
-                                <p className="text-sm text-gray-500 mt-2">Use lowercase letters, numbers, and dashes.</p>
+                                <p className="text-sm text-gray-500 mt-2">
+                                    Lowercase letters, numbers, and dashes only.
+                                    {urlSlug.length > 0 && urlSlug.length < 3 ? ' Use at least 3 characters when you can.' : ''}
+                                </p>
                             </div>
 
                             <div>
@@ -1145,7 +1244,10 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 <input
                                     type="text"
                                     value={keywords}
-                                    onChange={(e) => setKeywords(e.target.value)}
+                                    onChange={(e) => {
+                                        setKeywordsManual(true);
+                                        setKeywords(e.target.value);
+                                    }}
                                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary"
                                     placeholder="keyword1, keyword2"
                                 />

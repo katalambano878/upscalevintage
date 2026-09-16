@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { syncProductMedia } from '@/lib/data/catalog-sync';
+import { ensureUniqueProductSlug } from '@/lib/unique-product-slug';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -97,6 +98,10 @@ export async function PATCH(request: Request, context: Ctx) {
       } else if (key === 'tags') {
         sets.push(`${key} = $${i}::text[]`);
         params.push(Array.isArray(fields[key]) ? fields[key] : []);
+      } else if (key === 'slug') {
+        const uniqueSlug = await ensureUniqueProductSlug(String(fields[key] || fields.name || ''), id);
+        sets.push(`${key} = $${i}`);
+        params.push(uniqueSlug);
       } else {
         sets.push(`${key} = $${i}`);
         params.push(fields[key]);
@@ -130,6 +135,10 @@ export async function PATCH(request: Request, context: Ctx) {
     }
     return NextResponse.json(updated);
   } catch (err: unknown) {
+    const code = (err as { code?: string }).code;
+    if (code === '23505') {
+      return NextResponse.json({ error: 'A product with that slug or SKU already exists.' }, { status: 409 });
+    }
     const message = err instanceof Error ? err.message : 'Update failed';
     return NextResponse.json({ error: message }, { status: 500 });
   }

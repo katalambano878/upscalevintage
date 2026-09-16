@@ -3,6 +3,7 @@ import { query, queryOne } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { syncProductMedia } from '@/lib/data/catalog-sync';
 import { PRODUCT_VARIANTS_JSON_SQL } from '@/lib/product-variants';
+import { ensureUniqueProductSlug } from '@/lib/unique-product-slug';
 
 const PRODUCT_SELECT = `
   p.*,
@@ -96,11 +97,7 @@ export async function POST(request: Request) {
     } = body;
 
     const productName = String(name || '').trim();
-    const productSlug = String(slug || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)+/g, '');
+    const productSlug = await ensureUniqueProductSlug(String(slug || productName));
     const numericPrice = Number(price);
     const allowedStatus = new Set(['active', 'draft', 'archived']);
     const productStatus = allowedStatus.has(String(status).toLowerCase())

@@ -1,10 +1,23 @@
 /** Shared helpers to generate product SEO fields. */
 
+const GENERIC_CATEGORIES = new Set([
+  'new',
+  'uncategorized',
+  'general',
+  'other',
+  'category',
+  'test',
+  'default',
+]);
+
 export function slugifyProduct(value: string): string {
   return value
     .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .replace(/['’]/g, '')
+    .replace(/&/g, ' and ')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/(^-|-$)+/g, '');
@@ -12,6 +25,20 @@ export function slugifyProduct(value: string): string {
 
 export function stripHtml(value: string): string {
   return (value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function clipAtWord(text: string, max: number): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace >= Math.floor(max * 0.55) ? cut.slice(0, lastSpace) : cut).trim();
+}
+
+function usableCategory(name?: string | null): string {
+  const category = (name || '').trim();
+  if (!category || GENERIC_CATEGORIES.has(category.toLowerCase())) return '';
+  return category;
 }
 
 export type ProductSeoInput = {
@@ -30,22 +57,21 @@ export type ProductSeoFields = {
 
 export function buildProductSeo(input: ProductSeoInput): ProductSeoFields {
   const siteName = (input.siteName || process.env.NEXT_PUBLIC_SITE_NAME || 'Upscale Vintage').trim();
-  const name = (input.name || 'Product').trim();
-  const category = (input.categoryName || '').trim();
+  const name = (input.name || '').trim() || 'Product';
+  const category = usableCategory(input.categoryName);
   const plainDesc = stripHtml(input.description || '');
 
-  const seo_title = `${name} | Buy Online in Ghana | ${siteName}`.slice(0, 60);
+  const titleParts = [name];
+  if (category) titleParts.push(category);
+  titleParts.push(siteName);
+  const seo_title = clipAtWord(titleParts.join(' | '), 60);
 
   let seo_description = plainDesc;
   if (!seo_description) {
-    seo_description = [
-      `Shop ${name}${category ? ` in ${category}` : ''} at ${siteName}.`,
-      'Fast delivery across Ghana.',
-    ]
-      .filter(Boolean)
-      .join(' ');
+    const where = category ? ` in ${category}` : '';
+    seo_description = `Shop ${name}${where} at ${siteName}. Fast delivery across Ghana.`;
   }
-  seo_description = seo_description.slice(0, 160);
+  seo_description = clipAtWord(seo_description, 160);
 
   const tags = Array.from(
     new Set(

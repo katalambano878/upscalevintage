@@ -12,6 +12,26 @@
     @apply font-display font-semibold tracking-tight text-brand-espresso;
   }
 
+  /* Admin uses UI sans so labels stay readable (Cormorant + tracking-tight eats spaces). */
+  .admin-shell,
+  .admin-shell h1,
+  .admin-shell h2,
+  .admin-shell h3,
+  .admin-shell h4,
+  .admin-shell h5,
+  .admin-shell h6,
+  .admin-shell label,
+  .admin-shell p,
+  .admin-shell button,
+  .admin-shell input,
+  .admin-shell select,
+  .admin-shell textarea,
+  .admin-shell th,
+  .admin-shell td {
+    font-family: Manrope, system-ui, sans-serif;
+    letter-spacing: 0;
+  }
+
   p {
     @apply font-sans leading-relaxed tracking-normal;
   }
