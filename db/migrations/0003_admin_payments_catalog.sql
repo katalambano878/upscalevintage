@@ -1,6 +1,9 @@
 -- Partial payments used by checkout deposits + Moolre callback / reconcile.
 ALTER TYPE payment_status ADD VALUE IF NOT EXISTS 'partially_paid';
 
+-- Replace the 0002 two-arg function so POS/callback calls are not ambiguous.
+DROP FUNCTION IF EXISTS public.mark_order_paid(text, text);
+
 ALTER TABLE public.product_variants
   ADD COLUMN IF NOT EXISTS sale_price numeric(12,2);
 

@@ -51,6 +51,7 @@ Migrations in `db/migrations/`:
 2. `0002_upscale_rpcs_chat_payments.sql` — chat, contact, payment inbox, RPCs
 3. `0003_admin_payments_catalog.sql` — `partially_paid`, variant `sale_price`, default categories, payment RPCs
 4. `0004_products_sale_price.sql` — `products.sale_price` for store-wide sales
+5. `0005_mark_order_paid_overload.sql` — drop ambiguous two-arg `mark_order_paid`
 
 Applied on `store_upscalevintage` (2026-09-15). 42 public tables.
 

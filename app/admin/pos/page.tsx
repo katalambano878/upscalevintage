@@ -177,7 +177,10 @@ export default function POSPage() {
     // Get the customer email and phone for the order
     const getOrderEmail = () => {
         if (selectedCustomer?.email?.trim()) return selectedCustomer.email.trim();
-        return guestDetails.email.trim() || 'pos-walkin@store.local';
+        if (guestDetails.email.trim()) return guestDetails.email.trim();
+        const searched = customerSearch.trim();
+        if (searched.includes('@')) return searched;
+        return 'pos-walkin@store.local';
     };
 
     const getOrderPhone = () => {
@@ -207,7 +210,10 @@ export default function POSPage() {
         // For guest, require at least a name or phone
         if (!selectedCustomer) {
             const hasName = guestDetails.firstName.trim() || guestDetails.lastName.trim();
-            const hasContact = guestDetails.email.trim() || guestDetails.phone.trim();
+            const hasContact =
+                guestDetails.email.trim() ||
+                guestDetails.phone.trim() ||
+                customerSearch.includes('@');
             if (!hasName && !hasContact) return 'Please enter customer name or contact info';
         }
 
