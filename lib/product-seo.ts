@@ -29,7 +29,7 @@ export type ProductSeoFields = {
 };
 
 export function buildProductSeo(input: ProductSeoInput): ProductSeoFields {
-  const siteName = (input.siteName || process.env.NEXT_PUBLIC_SITE_NAME || 'Mamator').trim();
+  const siteName = (input.siteName || process.env.NEXT_PUBLIC_SITE_NAME || 'Upscale Vintage').trim();
   const name = (input.name || 'Product').trim();
   const category = (input.categoryName || '').trim();
   const plainDesc = stripHtml(input.description || '');

@@ -1,3 +1,5 @@
+import { CONTACT_PHONE, CONTACT_PHONE_DISPLAY, SUPPORT_EMAIL, WHATSAPP_LINK } from '@/lib/brand';
+
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-white">
@@ -281,7 +283,7 @@ export default function PrivacyPage() {
             </div>
 
             <p className="text-gray-600 leading-relaxed">
-              To exercise any of these rights, please contact us at <a href="mailto:your@email.com" className="text-brand-espresso font-medium hover:underline">your@email.com</a> or through your account settings. We will respond within 30 days.
+              To exercise any of these rights, please contact us at <a href={`mailto:${SUPPORT_EMAIL}`} className="text-brand-espresso font-medium hover:underline">{SUPPORT_EMAIL}</a> or through your account settings. We will respond within 30 days.
             </p>
           </section>
 
@@ -384,7 +386,7 @@ export default function PrivacyPage() {
                   <i className="ri-mail-line text-brand-espresso text-xl mt-1"></i>
                   <div>
                     <p className="font-medium text-gray-900">Email</p>
-                    <a href="mailto:your@email.com" className="text-brand-espresso hover:underline">your@email.com</a>
+                    <a href={`mailto:${SUPPORT_EMAIL}`} className="text-brand-espresso hover:underline">{SUPPORT_EMAIL}</a>
                   </div>
                 </div>
 
@@ -392,7 +394,7 @@ export default function PrivacyPage() {
                   <i className="ri-phone-line text-brand-espresso text-xl mt-1"></i>
                   <div>
                     <p className="font-medium text-gray-900">Phone</p>
-                    <a href="tel:YOUR_PHONE" className="text-brand-espresso hover:underline">YOUR_PHONE</a> · WhatsApp <a href="https://wa.me/YOUR_WHATSAPP_NUMBER" className="text-brand-espresso hover:underline">YOUR_WHATSAPP</a>
+                    <a href={`tel:${CONTACT_PHONE}`} className="text-brand-espresso hover:underline">{CONTACT_PHONE_DISPLAY}</a> · WhatsApp <a href={WHATSAPP_LINK} className="text-brand-espresso hover:underline">{CONTACT_PHONE_DISPLAY}</a>
                   </div>
                 </div>
 

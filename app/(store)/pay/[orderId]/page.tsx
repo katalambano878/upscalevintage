@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { apiData, apiPost, apiPatch, apiDelete, readJsonOrThrow } from '@/lib/client/api';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 function money(n: unknown): number {
@@ -81,7 +81,7 @@ export default function PaymentPage() {
         }),
       });
 
-      const paymentResult = await paymentRes.json();
+      const paymentResult = await readJsonOrThrow<{ success?: boolean; message?: string; url?: string }>(paymentRes);
 
       if (!paymentResult.success) {
         throw new Error(paymentResult.message || 'Payment initialization failed');
@@ -135,7 +135,7 @@ export default function PaymentPage() {
       <div className="max-w-lg mx-auto">
         <div className="text-center mb-8">
           <Link href="/" className="inline-block mb-6">
-            <span className="text-2xl font-['Pacifico'] text-store-primary">Mamator</span>
+            <span className="text-2xl font-display font-semibold text-brand-espresso">Upscale Vintage</span>
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">
             {isBalancePayment ? 'Pay Remaining Balance' : 'Complete Your Payment'}

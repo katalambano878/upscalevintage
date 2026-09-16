@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { createOrderFromCheckout } from '@/lib/data/orders';
+import { sendAndMarkOrderConfirmation } from '@/lib/notifications';
 
 /** In-store POS checkout (cash / card / immediate paid). */
 export async function POST(request: Request) {
@@ -54,6 +55,9 @@ export async function POST(request: Request) {
     }
 
     const paid = await queryOne(`SELECT * FROM orders WHERE id = $1::uuid`, [order.id]);
+    if (markPaid) {
+      await sendAndMarkOrderConfirmation((paid || order) as Record<string, unknown>);
+    }
     return NextResponse.json(paid || order, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'POS checkout failed';

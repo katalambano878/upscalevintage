@@ -64,7 +64,7 @@ export default function UpdatePrompt() {
         </div>
         <button
           onClick={handleUpdate}
-          className="bg-brand-espresso hover:bg-brand-nude/300 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex-shrink-0 active:scale-95"
+          className="bg-brand-espresso hover:bg-brand-nude/30 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex-shrink-0 active:scale-95"
         >
           Update
         </button>

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect, useMemo } from 'react';
-import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { apiData, apiPost, apiPatch, apiDelete, readJsonOrThrow } from '@/lib/client/api';
 import { asNumber, money } from '@/lib/format-money';
 
 function OrderSuccessContent() {
@@ -80,7 +80,7 @@ function OrderSuccessContent() {
         body: JSON.stringify({ orderNumber: orderNum })
       });
       
-      const result = await res.json();
+      const result = await readJsonOrThrow<{ success?: boolean; payment_status?: string }>(res);
       console.log('Payment verification result:', result);
       
       if (result.success && result.payment_status === 'paid') {

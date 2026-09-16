@@ -6,16 +6,21 @@ import { getOrderById } from '@/lib/data/orders';
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, context: Ctx) {
-  const { id } = await context.params;
-  const auth = await verifyAuth(request);
-  const userId = await getUserIdFromRequest(request);
-  const isStaff = auth.authenticated && isStaffRole(auth.role || '');
+  try {
+    const { id } = await context.params;
+    const auth = await verifyAuth(request);
+    const userId = await getUserIdFromRequest(request);
+    const isStaff = auth.authenticated && isStaffRole(auth.role || '');
 
-  const order = await getOrderById(id, userId, isStaff);
-  if (!order) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const order = await getOrderById(id, userId, isStaff);
+    if (!order) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    return NextResponse.json(order);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to load order';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-  return NextResponse.json(order);
 }
 
 export async function PATCH(request: Request, context: Ctx) {
@@ -64,9 +69,9 @@ export async function PATCH(request: Request, context: Ctx) {
       `SELECT payment_status::text AS payment_status FROM orders WHERE id = $1::uuid OR order_number = $1::text`,
       [id]
     );
-    if (current && current.payment_status !== 'paid') {
+    if (current && current.payment_status !== 'paid' && current.payment_status !== 'partially_paid') {
       return NextResponse.json(
-        { error: 'Order must be fully paid before packaged/delivered status' },
+        { error: 'Order must be paid or deposit-paid before packaged/delivered status' },
         { status: 400 }
       );
     }

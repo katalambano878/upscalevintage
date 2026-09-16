@@ -31,28 +31,33 @@ function contentTypeFor(filePath: string) {
 }
 
 export async function GET(_request: Request, context: Ctx) {
-  const { path: parts } = await context.params;
-  if (!parts?.length) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
+  try {
+    const { path: parts } = await context.params;
+    if (!parts?.length) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
-  const rel = parts.join('/');
-  if (rel.includes('..') || path.isAbsolute(rel)) {
-    return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
-  }
+    const rel = parts.join('/');
+    if (rel.includes('..') || path.isAbsolute(rel)) {
+      return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
 
-  const abs = path.join(uploadRoot(), ...parts);
-  const root = path.resolve(uploadRoot());
-  if (!abs.startsWith(root) || !existsSync(abs) || !statSync(abs).isFile()) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
+    const abs = path.join(uploadRoot(), ...parts);
+    const root = path.resolve(uploadRoot());
+    if (!abs.startsWith(root) || !existsSync(abs) || !statSync(abs).isFile()) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
-  const stream = createReadStream(abs);
-  const webStream = Readable.toWeb(stream) as ReadableStream;
-  return new NextResponse(webStream, {
-    headers: {
-      'Content-Type': contentTypeFor(abs),
-      'Cache-Control': 'public, max-age=31536000, immutable',
-    },
-  });
+    const stream = createReadStream(abs);
+    const webStream = Readable.toWeb(stream) as ReadableStream;
+    return new NextResponse(webStream, {
+      headers: {
+        'Content-Type': contentTypeFor(abs),
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      },
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Upload read failed';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { apiData, apiPost, apiPatch, apiDelete, readJsonOrThrow } from '@/lib/client/api';
 import { asNumber, money } from '@/lib/format-money';
 import {
     parseStorePricingValue,
@@ -379,7 +379,7 @@ export default function POSPage() {
                     })
                 });
 
-                const paymentResult = await paymentRes.json();
+                const paymentResult = await readJsonOrThrow<{ success?: boolean; message?: string; url?: string }>(paymentRes);
 
                 if (!paymentResult.success) {
                     throw new Error(paymentResult.message || 'Failed to initiate Mobile Money payment');

@@ -9,7 +9,12 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await request.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
   const userId = auth.user.id;
 
   try {
@@ -17,10 +22,10 @@ export async function PATCH(request: Request) {
       if (String(body.password).length < 6) {
         return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
       }
-      const encrypted = await hashPassword(String(body.password));
-      await query(`UPDATE users SET encrypted_password = $2, updated_at = now() WHERE id = $1::uuid`, [
+      const hashed = await hashPassword(String(body.password));
+      await query(`UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1::uuid`, [
         userId,
-        encrypted,
+        hashed,
       ]);
     }
 

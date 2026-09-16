@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import CheckoutSteps from '@/components/CheckoutSteps';
 import OrderSummary from '@/components/OrderSummary';
 import { useCart } from '@/context/CartContext';
-import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { apiData, apiPost, apiPatch, apiDelete, readJsonOrThrow } from '@/lib/client/api';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
 import {
@@ -212,7 +212,7 @@ export default function CheckoutPage() {
             })
           });
 
-          const paymentResult = await paymentRes.json();
+          const paymentResult = await readJsonOrThrow<{ success?: boolean; message?: string; url?: string }>(paymentRes);
 
           if (!paymentResult.success) {
             throw new Error(paymentResult.message || 'Payment initialization failed');

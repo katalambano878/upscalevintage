@@ -5,6 +5,7 @@ import {
     listOrdersAdmin,
     listOrdersForUser,
 } from '@/lib/data/orders';
+import { sendAndMarkOrderConfirmation } from '@/lib/notifications';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,6 +67,10 @@ export const POST = route(async (request) => {
         shippingCost: Number(shippingCost) || 0,
         tax: Number(tax) || 0,
     });
+
+    if (String(paymentMethod) !== 'moolre') {
+        await sendAndMarkOrderConfirmation(order as Record<string, unknown>);
+    }
 
     return ok(order, { status: 201 });
 });

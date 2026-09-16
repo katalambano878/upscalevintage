@@ -24,7 +24,7 @@ export async function GET(request: Request) {
             product_images: unknown;
             product_variants: unknown;
         }>(
-            `SELECT p.id, p.name, p.slug, p.price, p.compare_at_price, p.quantity,
+            `SELECT p.id, p.name, p.slug, p.price, p.sale_price, p.compare_at_price, p.quantity, p.moq,
                     p.description, p.metadata,
                     CASE WHEN c.id IS NULL THEN NULL
                          ELSE jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug)

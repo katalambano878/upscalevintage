@@ -164,6 +164,19 @@ export async function apiData<T>(
     return result.data;
 }
 
+/** Use when a page still calls fetch() instead of apiData. */
+export async function readJsonOrThrow<T>(response: Response): Promise<T> {
+    const contentType = response.headers.get('content-type') ?? '';
+    if (!contentType.includes('application/json')) {
+        throw new Error(
+            response.status >= 500
+                ? 'The server is not responding correctly. Please try again.'
+                : 'Unexpected response from the server.'
+        );
+    }
+    return (await response.json()) as T;
+}
+
 export function toQuery(params: Record<string, string | number | boolean | undefined | null>): string {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {

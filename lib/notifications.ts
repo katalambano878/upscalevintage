@@ -12,7 +12,7 @@ const BRAND = {
     colorLight: '#eff6ff',
     colorDark: '#064e3b',
     url: (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, ''),
-    phone: 'YOUR_PHONE',
+    phone: '054 503 5799',
 };
 
 // Reusable branded email layout
@@ -155,7 +155,7 @@ export async function sendSMS({ to, message }: { to: string; message: string }) 
             },
             body: JSON.stringify({
                 type: 1,
-                senderid: 'YOUR_BRAND_NAME',
+                senderid: process.env.MOOLRE_SMS_SENDER_ID || 'UPSCALEV',
                 messages: [
                     {
                         recipient: recipient,
@@ -303,6 +303,21 @@ ${emailButton('View Order in Admin', `${baseUrl}/admin/orders/${id}`)}
             to: phone,
             message: smsMessage
         });
+    }
+}
+
+export async function sendAndMarkOrderConfirmation(order: Record<string, unknown> | null | undefined) {
+    if (!order?.id) return;
+    const meta = (order.metadata || {}) as Record<string, unknown>;
+    if (meta.confirmation_sent_at) return;
+    try {
+        await sendOrderConfirmation(order);
+        await query(
+            `UPDATE orders SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb WHERE id = $1::uuid`,
+            [order.id, JSON.stringify({ confirmation_sent_at: new Date().toISOString() })]
+        );
+    } catch (err) {
+        console.error('[Notification] confirmation failed:', err);
     }
 }
 
