@@ -130,7 +130,15 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     });
 
     // Images
-    const [images, setImages] = useState<any[]>(initialData?.product_images || []);
+    const [images, setImages] = useState<any[]>(() =>
+        [...(initialData?.product_images || [])]
+            .sort((a: { position?: number }, b: { position?: number }) => (a.position ?? 0) - (b.position ?? 0))
+            .map((img: { url: string; position?: number; alt_text?: string }, idx: number) => ({
+                url: img.url,
+                position: img.position ?? idx,
+                alt_text: img.alt_text,
+            }))
+    );
     const [uploading, setUploading] = useState(false);
 
     // SEO
@@ -224,17 +232,30 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             const uploaded = await fetch('/api/uploads', { method: 'POST', body: form, credentials: 'include' }).then(
                 (r) => (r.ok ? r.json() : Promise.reject(new Error('Upload failed')))
             );
-            setImages([...images, { url: uploaded.url, position: images.length }]);
+            setImages((prev) => [...prev, { url: uploaded.url, position: prev.length }]);
 
         } catch (error: any) {
             alert('Error uploading image: ' + error.message);
         } finally {
             setUploading(false);
+            e.target.value = '';
         }
     };
 
     const handleRemoveImage = (indexToRemove: number) => {
-        setImages(images.filter((_, idx) => idx !== indexToRemove));
+        setImages((prev) =>
+            prev.filter((_, idx) => idx !== indexToRemove).map((img, idx) => ({ ...img, position: idx }))
+        );
+    };
+
+    const handleSetPrimaryImage = (index: number) => {
+        if (index <= 0) return;
+        setImages((prev) => {
+            const next = [...prev];
+            const [picked] = next.splice(index, 1);
+            next.unshift(picked);
+            return next.map((img, idx) => ({ ...img, position: idx }));
+        });
     };
 
     // Variant helpers removed — variants are now auto-generated from selectedColors × selectedSizes
@@ -416,33 +437,19 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 />
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    URL slug
-                                </label>
-                                <div className="flex items-center min-w-0">
-                                    <span className="hidden sm:inline text-gray-600 bg-gray-100 px-3 py-3 border-2 border-r-0 border-gray-300 rounded-l-lg whitespace-nowrap text-sm">
-                                        /product/
-                                    </span>
-                                    <input
-                                        type="text"
-                                        value={urlSlug}
-                                        onChange={(e) => {
-                                            setSlugManual(true);
-                                            setUrlSlug(slugifyProduct(e.target.value));
-                                        }}
-                                        autoCapitalize="none"
-                                        autoCorrect="off"
-                                        spellCheck={false}
-                                        className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg sm:rounded-l-none sm:rounded-r-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary font-mono text-sm"
-                                        placeholder="navy-linen-shirt"
-                                    />
-                                </div>
-                                <p className="text-sm text-gray-500 mt-2">
-                                    Live URL: <span className="font-mono text-gray-800">/product/{urlSlug || '…'}</span>
-                                    {!slugManual && ' · updates from the product name'}
+                            {productName.trim() && (
+                                <p className="text-sm text-gray-600 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                                    URL slug and SEO fields are on the <strong>SEO</strong> tab
+                                    {urlSlug ? (
+                                        <>
+                                            {' '}
+                                            (<span className="font-mono">/product/{urlSlug}</span>
+                                            {!slugManual && ', updates with the name'})
+                                        </>
+                                    ) : null}
+                                    .
                                 </p>
-                            </div>
+                            )}
 
                             <div>
                                 <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -719,7 +726,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {images.map((img: any, index: number) => (
-                                    <div key={index} className="relative group">
+                                    <div key={img.url || `img-${index}`} className="relative group">
                                         <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden border-2 border-gray-200">
                                             <img src={img.url} alt={`Product ${index + 1}`} className="w-full h-full object-cover" />
                                         </div>
@@ -732,7 +739,18 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                             <a href={img.url} target="_blank" rel="noreferrer" className="w-9 h-9 flex items-center justify-center bg-white text-gray-900 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
                                                 <i className="ri-eye-line"></i>
                                             </a>
+                                            {index > 0 && (
+                                                <button
+                                                    type="button"
+                                                    title="Set as primary"
+                                                    onClick={() => handleSetPrimaryImage(index)}
+                                                    className="w-9 h-9 flex items-center justify-center bg-white text-store-ink rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                                                >
+                                                    <i className="ri-star-line"></i>
+                                                </button>
+                                            )}
                                             <button
+                                                type="button"
                                                 onClick={() => handleRemoveImage(index)}
                                                 className="w-9 h-9 flex items-center justify-center bg-white text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
                                             >

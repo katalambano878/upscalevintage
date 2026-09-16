@@ -67,7 +67,12 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
           ...productData,
           price: asNumber(productData.price),
           compare_at_price: productData.compare_at_price != null ? asNumber(productData.compare_at_price) : null,
-          images: productData.product_images?.sort((a: any, b: any) => a.position - b.position).map((img: any) => img.url) || [],
+          images:
+            productData.product_images
+              ?.slice()
+              .sort((a: { position?: number }, b: { position?: number }) => (a.position ?? 0) - (b.position ?? 0))
+              .map((img: { url: string }) => img.url)
+              .filter(Boolean) || [],
           category: productData.categories?.name || 'Shop',
           rating: asNumber(productData.rating_avg),
           reviewCount: productData.review_count || 0,

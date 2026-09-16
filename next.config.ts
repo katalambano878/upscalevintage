@@ -13,6 +13,21 @@ const nextConfig: NextConfig = {
         pathname: '/uploads/**',
       },
       {
+        protocol: 'https',
+        hostname: 'upscalevintage.shop',
+        pathname: '/api/uploads/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.upscalevintage.shop',
+        pathname: '/uploads/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.upscalevintage.shop',
+        pathname: '/api/uploads/**',
+      },
+      {
         protocol: 'http',
         hostname: 'localhost',
       },
