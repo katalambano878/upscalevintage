@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
+import { applyCouponUsageForOrder } from '@/lib/coupons';
 import { sendOrderConfirmation } from '@/lib/notifications';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
 import {
@@ -137,6 +138,18 @@ export async function POST(req: Request) {
       const orderJson = await recordPayment(merchantOrderRef, moolreReference, chargedAmount);
       if (!orderJson?.id) {
         return NextResponse.json({ success: false, message: 'Database update failed' }, { status: 500 });
+      }
+
+      if (
+        (orderJson.payment_status === 'paid' || orderJson.payment_status === 'partially_paid') &&
+        prevStatus !== 'paid' &&
+        prevStatus !== 'partially_paid'
+      ) {
+        try {
+          await applyCouponUsageForOrder(orderJson);
+        } catch (couponErr: unknown) {
+          console.error('[Callback] Coupon usage failed:', couponErr);
+        }
       }
 
       if (orderJson.payment_status === 'paid' && orderJson.email && prevStatus !== 'paid') {

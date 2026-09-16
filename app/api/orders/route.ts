@@ -37,6 +37,7 @@ export const POST = route(async (request) => {
         cart,
         shippingCost = 0,
         tax = 0,
+        couponCode = null,
     } = body;
 
     if (
@@ -66,6 +67,7 @@ export const POST = route(async (request) => {
         cart: cart as Parameters<typeof createOrderFromCheckout>[0]['cart'],
         shippingCost: Number(shippingCost) || 0,
         tax: Number(tax) || 0,
+        couponCode: couponCode ? String(couponCode) : null,
     });
 
     if (String(paymentMethod) !== 'moolre') {

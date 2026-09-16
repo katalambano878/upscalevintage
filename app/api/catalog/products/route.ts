@@ -41,7 +41,9 @@ export async function GET(request: Request) {
 
   if (search) {
     params.push(`%${search}%`);
-    where.push(`(p.name ILIKE $${params.length} OR p.slug ILIKE $${params.length})`);
+    where.push(
+      `(p.name ILIKE $${params.length} OR p.slug ILIKE $${params.length} OR COALESCE(p.sku, '') ILIKE $${params.length} OR COALESCE(c.name, '') ILIKE $${params.length})`
+    );
   }
 
   let orderSql = 'p.created_at DESC';

@@ -2,17 +2,23 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import CartCountdown from '@/components/CartCountdown';
 import AdvancedCouponSystem from '@/components/AdvancedCouponSystem';
 import { useCart } from '@/context/CartContext';
 import PageHero from '@/components/PageHero';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import {
+  clearAppliedCoupon,
+  readAppliedCoupon,
+  writeAppliedCoupon,
+  type AppliedCoupon,
+} from '@/lib/coupon-session';
 
 export default function CartPage() {
   usePageTitle('Shopping Cart');
   const { cart: cartItems, removeFromCart, updateQuantity, subtotal, addToCart } = useCart();
-  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [savedItems, setSavedItems] = useState<any[]>([]);
 
   // Function to move item to saved for later (local state only for now)
@@ -33,26 +39,21 @@ export default function CartPage() {
     }
   };
 
-  const applyCoupon = (coupon: any) => {
+  useEffect(() => {
+    setAppliedCoupon(readAppliedCoupon());
+  }, []);
+
+  const applyCoupon = (coupon: AppliedCoupon) => {
     setAppliedCoupon(coupon);
+    writeAppliedCoupon(coupon);
   };
 
   const removeCoupon = () => {
     setAppliedCoupon(null);
+    clearAppliedCoupon();
   };
 
-  // Savings calculation is tricky without originalPrice in Context.
-  // Assuming 0 for now unless we update Context.
-  const savings = 0;
-
-  let couponDiscount = 0;
-  if (appliedCoupon) {
-    if (appliedCoupon.type === 'percentage') {
-      couponDiscount = subtotal * (appliedCoupon.discount / 100);
-    } else {
-      couponDiscount = appliedCoupon.discount;
-    }
-  }
+  const couponDiscount = appliedCoupon?.discount || 0;
 
   const shipping = subtotal >= 200 ? 0 : 15;
   const total = subtotal - couponDiscount + shipping;

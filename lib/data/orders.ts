@@ -1,4 +1,6 @@
 import { query, queryOne, transaction } from '@/lib/db';
+import { ApiError } from '@/lib/api';
+import { validateCoupon } from '@/lib/coupons';
 import { parseStorePricingValue, resolveCartLineUnitPrice } from '@/lib/pricing';
 import {
   computePaymentPlan,
@@ -44,6 +46,7 @@ export async function createOrderFromCheckout(input: {
   cart: CartLineInput[];
   shippingCost?: number;
   tax?: number;
+  couponCode?: string | null;
 }) {
   const shippingCost = Math.max(0, Number(input.shippingCost) || 0);
   const tax = Math.max(0, Number(input.tax) || 0);
@@ -108,9 +111,32 @@ export async function createOrderFromCheckout(input: {
     });
   }
 
-  const checkoutTotal = computedSubtotal + shippingCost + tax;
-  const plan = computePaymentPlan(checkoutTotal, paymentOption);
   const shipping = input.shippingData;
+  let discountTotal = 0;
+  let shippingFinal = shippingCost;
+  let couponMeta: Record<string, unknown> = {};
+
+  if (input.couponCode?.trim()) {
+    const couponResult = await validateCoupon({
+      code: input.couponCode,
+      subtotal: computedSubtotal,
+      email: shipping.email,
+    });
+    if (!couponResult.valid) {
+      throw new ApiError(couponResult.reason, 400, 'invalid_coupon');
+    }
+    discountTotal = couponResult.discount;
+    if (couponResult.freeShipping) shippingFinal = 0;
+    couponMeta = {
+      coupon_code: couponResult.coupon.code,
+      coupon_id: couponResult.coupon.id,
+      coupon_type: couponResult.coupon.type,
+      coupon_discount: discountTotal,
+    };
+  }
+
+  const checkoutTotal = Math.max(0, computedSubtotal + shippingFinal + tax - discountTotal);
+  const plan = computePaymentPlan(checkoutTotal, paymentOption);
 
   return transaction(async (client) => {
     const orderResult = await client.query(
@@ -120,7 +146,7 @@ export async function createOrderFromCheckout(input: {
         shipping_method, payment_method, shipping_address, billing_address, metadata
       ) VALUES (
         $1, $2::uuid, $3, $4, 'pending'::order_status, 'pending'::payment_status, 'GHS',
-        $5, $6, $7, 0, $8,
+        $5, $6, $7, $14, $8,
         $9, $10, $11::jsonb, $12::jsonb, $13::jsonb
       ) RETURNING *`,
       [
@@ -130,7 +156,7 @@ export async function createOrderFromCheckout(input: {
         shipping.phone,
         computedSubtotal,
         tax,
-        shippingCost,
+        shippingFinal,
         plan.orderTotal,
         input.deliveryMethod,
         input.paymentMethod,
@@ -148,7 +174,9 @@ export async function createOrderFromCheckout(input: {
           balance_due: plan.option === 'half' ? plan.balanceDue : 0,
           due_now: plan.dueNow,
           balance_due_before: 'pickup_or_delivery',
+          ...couponMeta,
         }),
+        discountTotal,
       ]
     );
 

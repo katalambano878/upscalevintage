@@ -1,133 +1,60 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
-import { asNumber, money } from '@/lib/format-money';
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, AreaChart, Area, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { apiData } from '@/lib/client/api';
+import { money } from '@/lib/format-money';
+import {
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
+
+type AnalyticsPayload = {
+  metrics: {
+    revenue: number;
+    revenueGrowth: number;
+    orders: number;
+    ordersGrowth: number;
+    aov: number;
+    aovGrowth: number;
+    paidRate: number;
+    paidRateGrowth: number;
+    discountTotal: number;
+    ordersAll: number;
+  };
+  sales: { date: string; sales: number; orders: number }[];
+  topProducts: { name: string; units: number; revenue: number }[];
+  categories: { name: string; value: number }[];
+};
+
+function growthLabel(n: number) {
+  if (!n) return '0% vs prior';
+  return `${n > 0 ? '+' : ''}${n}% vs prior`;
+}
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState('30days');
-  const [reportType, setReportType] = useState('overview');
   const [loading, setLoading] = useState(true);
-
-  const [salesData, setSalesData] = useState<any[]>([]);
-  const [categoryRevenue, setCategoryRevenue] = useState<any[]>([]);
-  const [topProducts, setTopProducts] = useState<any[]>([]);
-
-  const [metrics, setMetrics] = useState({
-    revenue: 0,
-    revenueGrowth: 0,
-    orders: 0,
-    ordersGrowth: 0,
-    aov: 0,
-    aovGrowth: 0,
-    conversion: 0,
-    conversionGrowth: 0
-  });
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<AnalyticsPayload | null>(null);
 
   const fetchAnalytics = useCallback(async () => {
     try {
       setLoading(true);
-
-      // Calculate start date based on timeRange
-      const now = new Date();
-      let startDate = new Date();
-      if (timeRange === '7days') startDate.setDate(now.getDate() - 7);
-      if (timeRange === '30days') startDate.setDate(now.getDate() - 30);
-      if (timeRange === '90days') startDate.setDate(now.getDate() - 90);
-      if (timeRange === 'year') startDate.setFullYear(now.getFullYear(), 0, 1);
-
-      const isoStart = startDate.toISOString();
-
-      const orders = (await apiData<any[]>('/api/orders')).filter(
-        (o) =>
-          new Date(o.created_at) >= startDate &&
-          o.payment_status === 'paid' &&
-          o.status !== 'cancelled'
-      );
-
-      const validItems: any[] = [];
-      for (const o of orders) {
-        for (const item of o.order_items || []) {
-          validItems.push({ ...item, order_id: o.id });
-        }
-      }
-
-      // Process Metrics
-      const totalRevenue = orders?.reduce((sum, o) => sum + asNumber(o.total), 0) || 0;
-      const totalOrders = orders?.length || 0;
-      const aov = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-      setMetrics({
-        revenue: totalRevenue,
-        revenueGrowth: 0, // Needs comparison with previous period (skipped for simplicity/speed)
-        orders: totalOrders,
-        ordersGrowth: 0,
-        aov: aov,
-        aovGrowth: 0,
-        conversion: 0, // No visitor data
-        conversionGrowth: 0
-      });
-
-      // Process Sales Chart Data (Group by Date with Zero-Filling)
-      const salesMap: Record<string, any> = {};
-
-      // Initialize map with all dates in range
-      const d = new Date(startDate);
-      const today = new Date();
-      while (d <= today) {
-        const dateKey = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        salesMap[dateKey] = {
-          date: dateKey,
-          sales: 0,
-          orders: 0,
-          fullDate: d.getTime() // Helper for sorting
-        };
-        d.setDate(d.getDate() + 1);
-      }
-
-      orders?.forEach(o => {
-        const dateKey = new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        if (salesMap[dateKey]) {
-          salesMap[dateKey].sales += asNumber(o.total);
-          salesMap[dateKey].orders += 1;
-        }
-      });
-
-      setSalesData(Object.values(salesMap));
-
-      // Process Category Revenue
-      const catMap: Record<string, any> = {};
-      validItems.forEach(item => {
-        const catName = item.products?.categories?.name || 'Uncategorized';
-        if (!catMap[catName]) catMap[catName] = { name: catName, value: 0 };
-        // Use total_price if available, otherwise calculate from unit_price * quantity
-        const itemRevenue =
-          asNumber(item.total_price) ||
-          asNumber(item.unit_price) * asNumber(item.quantity);
-        catMap[catName].value += itemRevenue;
-      });
-      // Convert to array for Recharts Pie
-      const catArray = Object.values(catMap).map((c: any) => ({ name: c.name, value: c.value }));
-      setCategoryRevenue(catArray);
-
-      // Process Top Products
-      const prodMap: Record<string, any> = {};
-      validItems.forEach(item => {
-        const pName = item.products?.name || 'Unknown';
-        if (!prodMap[pName]) prodMap[pName] = { name: pName, revenue: 0, units: 0 };
-        const itemRevenue =
-          asNumber(item.total_price) ||
-          asNumber(item.unit_price) * asNumber(item.quantity);
-        prodMap[pName].revenue += itemRevenue;
-        prodMap[pName].units += asNumber(item.quantity);
-      });
-      const topProdArray = Object.values(prodMap).sort((a: any, b: any) => b.revenue - a.revenue).slice(0, 5);
-      setTopProducts(topProdArray);
-
-    } catch (err) {
-      console.error('Error fetching analytics:', err);
+      setError(null);
+      const payload = await apiData<AnalyticsPayload>(`/api/admin/analytics?range=${timeRange}`);
+      setData(payload);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load analytics');
     } finally {
       setLoading(false);
     }
@@ -138,14 +65,48 @@ export default function AnalyticsPage() {
   }, [fetchAnalytics]);
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
+  const metrics = data?.metrics;
+  const salesData = data?.sales || [];
+  const categoryRevenue = data?.categories || [];
+  const topProducts = data?.topProducts || [];
+
+  const exportCsv = () => {
+    if (!data) return;
+    const lines = [
+      'Metric,Value',
+      `Revenue,${data.metrics.revenue}`,
+      `Paid orders,${data.metrics.orders}`,
+      `All orders,${data.metrics.ordersAll}`,
+      `AOV,${data.metrics.aov}`,
+      `Paid rate,${data.metrics.paidRate}`,
+      `Discount total,${data.metrics.discountTotal}`,
+      '',
+      'Date,Sales,Orders',
+      ...data.sales.map((row) => `${row.date},${row.sales},${row.orders}`),
+      '',
+      'Product,Units,Revenue',
+      ...data.topProducts.map((p) => `"${p.name.replace(/"/g, '""')}",${p.units},${p.revenue}`),
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `upscale-analytics-${timeRange}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Advanced Analytics</h1>
-            <p className="text-gray-600 mt-1 md:mt-2 text-sm md:text-base">Detailed insights and performance metrics</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 font-sans tracking-normal">
+              Advanced Analytics
+            </h1>
+            <p className="text-gray-600 mt-1 md:mt-2 text-sm md:text-base font-sans tracking-normal">
+              Detailed insights and performance metrics
+            </p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <select
@@ -158,7 +119,12 @@ export default function AnalyticsPage() {
               <option value="90days">Last 90 Days</option>
               <option value="year">This Year</option>
             </select>
-            <button className="bg-store-navy hover:bg-store-navy text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center">
+            <button
+              type="button"
+              onClick={exportCsv}
+              disabled={!data}
+              className="bg-store-navy hover:bg-store-navy text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center disabled:opacity-50"
+            >
               <i className="ri-download-line mr-2"></i>
               Export
             </button>
@@ -171,132 +137,166 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-store-surface rounded-lg">
-                <i className="ri-money-dollar-circle-line text-2xl text-store-ink"></i>
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">{error}</div>
+        )}
+
+        {loading || !metrics ? (
+          <div className="p-12 text-center text-gray-500">
+            <i className="ri-loader-4-line animate-spin text-3xl mb-2 inline-block"></i>
+            <p>Loading analytics…</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 flex items-center justify-center bg-store-surface rounded-lg">
+                    <i className="ri-money-dollar-circle-line text-2xl text-store-ink"></i>
+                  </div>
+                  <span className="text-store-ink font-semibold text-sm">{growthLabel(metrics.revenueGrowth)}</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
+                <p className="text-3xl font-bold text-gray-900">GH₵{money(metrics.revenue)}</p>
               </div>
-              <span className="text-store-ink font-semibold text-sm">Live</span>
-            </div>
-            <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
-            <p className="text-3xl font-bold text-gray-900">GH₵{metrics.revenue.toLocaleString()}</p>
-          </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-store-surface rounded-lg">
-                <i className="ri-shopping-cart-line text-2xl text-store-ink"></i>
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 flex items-center justify-center bg-store-surface rounded-lg">
+                    <i className="ri-shopping-cart-line text-2xl text-store-ink"></i>
+                  </div>
+                  <span className="text-store-ink font-semibold text-sm">{growthLabel(metrics.ordersGrowth)}</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-1">Total Orders</p>
+                <p className="text-3xl font-bold text-gray-900">{metrics.orders}</p>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 flex items-center justify-center bg-store-primary/15 rounded-lg">
+                    <i className="ri-bar-chart-box-line text-2xl text-store-primary"></i>
+                  </div>
+                  <span className="text-store-ink font-semibold text-sm">{growthLabel(metrics.aovGrowth)}</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-1">Avg. Order Value</p>
+                <p className="text-3xl font-bold text-gray-900">GH₵{money(metrics.aov)}</p>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 flex items-center justify-center bg-amber-100 rounded-lg">
+                    <i className="ri-percent-line text-2xl text-amber-700"></i>
+                  </div>
+                  <span className="text-store-ink font-semibold text-sm">{growthLabel(metrics.paidRateGrowth)}</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-1">Paid Rate</p>
+                <p className="text-3xl font-bold text-gray-900">{metrics.paidRate}%</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Paid orders ÷ all orders ({metrics.orders}/{metrics.ordersAll})
+                </p>
               </div>
             </div>
-            <p className="text-sm text-gray-600 mb-1">Total Orders</p>
-            <p className="text-3xl font-bold text-gray-900">{metrics.orders}</p>
-          </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-store-primary/15 rounded-lg">
-                <i className="ri-bar-chart-box-line text-2xl text-store-primary"></i>
+            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900 font-sans tracking-normal">
+                  Revenue & Performance Trends
+                </h2>
               </div>
-            </div>
-            <p className="text-sm text-gray-600 mb-1">Avg. Order Value</p>
-            <p className="text-3xl font-bold text-gray-900">GH₵{money(metrics.aov)}</p>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-amber-100 rounded-lg">
-                <i className="ri-percent-line text-2xl text-amber-700"></i>
-              </div>
-            </div>
-            <p className="text-sm text-gray-600 mb-1">Conversion Rate</p>
-            <p className="text-3xl font-bold text-gray-900">--</p>
-            <p className="text-xs text-gray-400 mt-1">Setup Tracking</p>
-          </div>
-        </div>
-
-        {/* Charts */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-gray-900">Revenue & Performance Trends</h2>
-            {/* Report Type Toggles omitted for brevity, hardcoded to Sales for now */}
-          </div>
-          <div style={{ width: '100%', height: 350 }}>
-            <ResponsiveContainer>
-              <AreaChart data={salesData.length > 0 ? salesData : [{ date: 'No Data', sales: 0 }]}>
-                <defs>
-                  <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="date" stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip />
-                <Legend />
-                <Area type="monotone" dataKey="sales" stroke="#10b981" fillOpacity={1} fill="url(#colorSales)" name="Sales (GH₵)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Pie Chart */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Revenue by Category</h2>
-            <div className="flex items-center justify-center mb-6">
-              <div style={{ width: '100%', height: 250 }}>
+              <div style={{ width: '100%', height: 350 }}>
                 <ResponsiveContainer>
-                  <PieChart>
-                    <Pie
-                      data={categoryRevenue.length > 0 ? categoryRevenue : [{ name: 'No Data', value: 1 }]}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {categoryRevenue.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
+                  <AreaChart data={salesData.length > 0 ? salesData : [{ date: 'No Data', sales: 0 }]}>
+                    <defs>
+                      <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="date" stroke="#6b7280" />
+                    <YAxis stroke="#6b7280" />
                     <Tooltip />
                     <Legend />
-                  </PieChart>
+                    <Area
+                      type="monotone"
+                      dataKey="sales"
+                      stroke="#10b981"
+                      fillOpacity={1}
+                      fill="url(#colorSales)"
+                      name="Sales (GH₵)"
+                    />
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
-          </div>
 
-          {/* Top Products */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Top Performing Products</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b border-gray-100">
-                  <tr>
-                    <th className="text-left pb-3 text-sm font-semibold text-gray-600">Product</th>
-                    <th className="text-right pb-3 text-sm font-semibold text-gray-600">Units</th>
-                    <th className="text-right pb-3 text-sm font-semibold text-gray-600">Revenue</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {topProducts.map((product, index) => (
-                    <tr key={index}>
-                      <td className="py-3 text-sm font-medium text-gray-900">{product.name}</td>
-                      <td className="py-3 text-right text-sm text-gray-600">{product.units}</td>
-                      <td className="py-3 text-right text-sm font-semibold text-store-muted">GH₵{product.revenue.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                  {topProducts.length === 0 && <tr><td colSpan={3} className="text-center py-4 text-gray-500">No sales data yet.</td></tr>}
-                </tbody>
-              </table>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-6 font-sans tracking-normal">
+                  Revenue by Category
+                </h2>
+                <div className="flex items-center justify-center mb-6">
+                  <div style={{ width: '100%', height: 250 }}>
+                    <ResponsiveContainer>
+                      <PieChart>
+                        <Pie
+                          data={categoryRevenue.length > 0 ? categoryRevenue : [{ name: 'No Data', value: 1 }]}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {categoryRevenue.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 font-sans tracking-normal">
+                  Top Performing Products
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="border-b border-gray-100">
+                      <tr>
+                        <th className="text-left pb-3 text-sm font-semibold text-gray-600">Product</th>
+                        <th className="text-right pb-3 text-sm font-semibold text-gray-600">Units</th>
+                        <th className="text-right pb-3 text-sm font-semibold text-gray-600">Revenue</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {topProducts.map((product) => (
+                        <tr key={product.name}>
+                          <td className="py-3 text-sm font-medium text-gray-900">{product.name}</td>
+                          <td className="py-3 text-right text-sm text-gray-600">{product.units}</td>
+                          <td className="py-3 text-right text-sm font-semibold text-store-muted">
+                            GH₵{money(product.revenue)}
+                          </td>
+                        </tr>
+                      ))}
+                      {topProducts.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="text-center py-4 text-gray-500">
+                            No sales data yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

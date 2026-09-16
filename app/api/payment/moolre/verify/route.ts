@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
+import { applyCouponUsageForOrder } from '@/lib/coupons';
 import { sendOrderConfirmation } from '@/lib/notifications';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
 import { resolveMoolreExternalRefForOrder, verifyMoolrePayment } from '@/lib/payment/moolre';
@@ -99,6 +100,18 @@ export async function POST(req: Request) {
 
     if (!orderJson) {
       return NextResponse.json({ success: false, message: 'Failed to update order' }, { status: 500 });
+    }
+
+    if (
+      (orderJson.payment_status === 'paid' || orderJson.payment_status === 'partially_paid') &&
+      prevStatus !== 'paid' &&
+      prevStatus !== 'partially_paid'
+    ) {
+      try {
+        await applyCouponUsageForOrder(orderJson);
+      } catch (couponErr: unknown) {
+        console.error('[Verify] Coupon usage failed:', couponErr);
+      }
     }
 
     if (orderJson.payment_status === 'paid' && orderJson.email && prevStatus !== 'paid') {

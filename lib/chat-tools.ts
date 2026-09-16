@@ -427,61 +427,23 @@ export async function getCustomerOrders(_supabase: unknown, userId: string, limi
 // ─── 5. Check Coupon ────────────────────────────────────────────────────────
 
 export async function checkCoupon(_supabase: unknown, code: string, cartTotal?: number): Promise<ChatCoupon> {
-    const trimmed = (code || '').trim().toUpperCase();
-    if (!trimmed) return { valid: false, code: trimmed, reason: 'No code provided.' };
-
-    const data = await queryOne<Record<string, unknown>>(
-        `SELECT * FROM coupons WHERE upper(code) = upper($1) LIMIT 1`,
-        [trimmed]
-    );
-    if (!data) {
-        return { valid: false, code: trimmed, reason: 'This coupon code does not exist.' };
+    const { validateCoupon } = await import('@/lib/coupons');
+    const result = await validateCoupon({ code, subtotal: cartTotal });
+    if (!result.valid) {
+        return { valid: false, code: result.code, reason: result.reason };
     }
-
-    const isActive = data.is_active !== false;
-    const now = new Date();
-    const start = data.start_date ? new Date(String(data.start_date)) : null;
-    const end = data.end_date ? new Date(String(data.end_date)) : null;
-    const usageLimit = data.usage_limit;
-    const usageCount = Number(data.usage_count ?? 0);
-
-    const minPurchase = Number(data.minimum_purchase ?? 0) || 0;
-    const maxDisc = data.maximum_discount != null ? Number(data.maximum_discount) : undefined;
-    // upscalevintage uses an enum: 'percentage' | 'fixed_amount' | 'free_shipping'.
-    // Normalize so the UI can render a single label.
-    const rawType = data.type as string;
     const type =
-        rawType === 'percentage'
-            ? 'percentage'
-            : rawType === 'fixed_amount'
-              ? 'fixed'
-              : rawType === 'free_shipping'
-                ? 'free_shipping'
-                : rawType || 'percentage';
-    const value = Number(data.value ?? 0);
-
-    if (!isActive) return { valid: false, code: trimmed, reason: 'This coupon is no longer active.' };
-    if (start && start > now) return { valid: false, code: trimmed, reason: 'This coupon is not yet valid.' };
-    if (end && end < now) return { valid: false, code: trimmed, reason: 'This coupon has expired.' };
-    if (usageLimit != null && usageCount >= Number(usageLimit)) {
-        return { valid: false, code: trimmed, reason: 'This coupon has reached its usage limit.' };
-    }
-    if (cartTotal !== undefined && minPurchase > 0 && cartTotal < minPurchase) {
-        return {
-            valid: false,
-            code: trimmed,
-            reason: `Minimum purchase of GH₵${minPurchase.toFixed(2)} required.`,
-        };
-    }
-
+        result.coupon.type === 'fixed_amount'
+            ? 'fixed'
+            : result.coupon.type;
     return {
         valid: true,
-        code: trimmed,
+        code: result.code,
         type,
-        value,
-        minimum_purchase: minPurchase || undefined,
-        maximum_discount: maxDisc,
-        expires: data.end_date ? String(data.end_date) : undefined,
+        value: result.coupon.value,
+        minimum_purchase: result.coupon.minimum_purchase || undefined,
+        maximum_discount: result.coupon.maximum_discount ?? undefined,
+        expires: result.coupon.end_date || undefined,
     };
 }
 

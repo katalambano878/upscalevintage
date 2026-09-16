@@ -16,6 +16,8 @@ interface OrderSummaryProps {
   dueNow?: number;
   balanceDue?: number;
   paymentOption?: 'full' | 'half';
+  discount?: number;
+  couponCode?: string | null;
 }
 
 export default function OrderSummary({
@@ -27,6 +29,8 @@ export default function OrderSummary({
   dueNow,
   balanceDue,
   paymentOption,
+  discount = 0,
+  couponCode,
 }: OrderSummaryProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm p-6 sticky top-4">
@@ -59,6 +63,12 @@ export default function OrderSummary({
           <span>Subtotal</span>
           <span className="font-semibold">GH₵ {subtotal.toFixed(2)}</span>
         </div>
+        {discount > 0 && (
+          <div className="flex justify-between text-brand-espresso">
+            <span>Coupon{couponCode ? ` (${couponCode})` : ''}</span>
+            <span className="font-semibold">-GH₵ {discount.toFixed(2)}</span>
+          </div>
+        )}
         <div className="flex justify-between text-gray-700">
           <span>Shipping</span>
           <span className="font-semibold">

@@ -1,178 +1,116 @@
 'use client';
 
 import { useState } from 'react';
-
-interface Coupon {
-  code: string;
-  discount: number;
-  type: 'percentage' | 'fixed';
-  minPurchase?: number;
-  maxDiscount?: number;
-  description: string;
-}
+import type { AppliedCoupon } from '@/lib/coupon-session';
 
 interface AdvancedCouponSystemProps {
   subtotal: number;
-  onApply: (coupon: Coupon) => void;
+  email?: string;
+  onApply: (coupon: AppliedCoupon) => void;
   onRemove: () => void;
-  appliedCoupon: Coupon | null;
+  appliedCoupon: AppliedCoupon | null;
 }
 
-export default function AdvancedCouponSystem({ 
-  subtotal, 
-  onApply, 
+export default function AdvancedCouponSystem({
+  subtotal,
+  email,
+  onApply,
   onRemove,
-  appliedCoupon 
+  appliedCoupon,
 }: AdvancedCouponSystemProps) {
   const [couponCode, setCouponCode] = useState('');
   const [error, setError] = useState('');
-  const [showAvailable, setShowAvailable] = useState(false);
+  const [checking, setChecking] = useState(false);
 
-  const availableCoupons: Coupon[] = [
-    { 
-      code: 'WELCOME10', 
-      discount: 10, 
-      type: 'percentage',
-      minPurchase: 100,
-      description: '10% off on orders over GH₵100'
-    },
-    { 
-      code: 'SAVE20', 
-      discount: 20, 
-      type: 'percentage',
-      minPurchase: 200,
-      maxDiscount: 50,
-      description: '20% off (max GH₵50) on orders over GH₵200'
-    },
-    { 
-      code: 'FREE50', 
-      discount: 50, 
-      type: 'fixed',
-      minPurchase: 500,
-      description: 'GH₵50 off on orders over GH₵500'
-    },
-    { 
-      code: 'NEWCUSTOMER', 
-      discount: 15, 
-      type: 'percentage',
-      maxDiscount: 30,
-      description: '15% off (max GH₵30) for new customers'
+  const handleApply = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) {
+      setError('Enter a coupon code');
+      return;
     }
-  ];
 
-  const handleApply = () => {
+    setChecking(true);
     setError('');
-    const coupon = availableCoupons.find(c => c.code.toLowerCase() === couponCode.toLowerCase());
-    
-    if (!coupon) {
-      setError('Invalid coupon code');
-      return;
+    try {
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ code, subtotal, email }),
+      });
+      const data = (await res.json()) as {
+        valid?: boolean;
+        reason?: string;
+        error?: string;
+        code?: string;
+        type?: AppliedCoupon['type'];
+        value?: number;
+        discount?: number;
+        freeShipping?: boolean;
+        description?: string | null;
+      };
+      if (!res.ok) {
+        setError(data.error || 'Could not validate coupon');
+        return;
+      }
+      if (!data.valid) {
+        setError(data.reason || 'Invalid coupon code');
+        return;
+      }
+      onApply({
+        code: data.code || code,
+        type: data.type || 'percentage',
+        value: Number(data.value) || 0,
+        discount: Number(data.discount) || 0,
+        freeShipping: Boolean(data.freeShipping),
+        description: data.description || undefined,
+      });
+      setCouponCode('');
+    } catch {
+      setError('Could not validate coupon. Please try again.');
+    } finally {
+      setChecking(false);
     }
-
-    if (coupon.minPurchase && subtotal < coupon.minPurchase) {
-      setError(`Minimum purchase of GH₵${coupon.minPurchase} required`);
-      return;
-    }
-
-    onApply(coupon);
-    setCouponCode('');
-    setShowAvailable(false);
-  };
-
-  const handleQuickApply = (coupon: Coupon) => {
-    if (coupon.minPurchase && subtotal < coupon.minPurchase) {
-      setError(`Add GH₵${(coupon.minPurchase - subtotal).toFixed(2)} more to use this coupon`);
-      return;
-    }
-    setError('');
-    onApply(coupon);
-    setShowAvailable(false);
   };
 
   return (
     <div className="space-y-4">
       {!appliedCoupon ? (
-        <>
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Have a coupon code?
-            </label>
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                value={couponCode}
-                onChange={(e) => {
-                  setCouponCode(e.target.value.toUpperCase());
-                  setError('');
-                }}
-                placeholder="Enter code"
-                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso text-sm"
-              />
-              <button
-                onClick={handleApply}
-                className="bg-gray-900 hover:bg-brand-cocoa text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap"
-              >
-                Apply
-              </button>
-            </div>
-            {error && (
-              <p className="text-sm text-red-600 mt-2 flex items-center">
-                <i className="ri-error-warning-line mr-1"></i>
-                {error}
-              </p>
-            )}
+        <div>
+          <label className="block text-sm font-semibold text-gray-900 mb-2">Have a coupon code?</label>
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              value={couponCode}
+              onChange={(e) => {
+                setCouponCode(e.target.value.toUpperCase());
+                setError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleApply();
+                }
+              }}
+              placeholder="Enter code"
+              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-espresso text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => void handleApply()}
+              disabled={checking}
+              className="bg-gray-900 hover:bg-brand-cocoa text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap disabled:opacity-60"
+            >
+              {checking ? 'Checking…' : 'Apply'}
+            </button>
           </div>
-
-          <button
-            onClick={() => setShowAvailable(!showAvailable)}
-            className="text-sm text-brand-espresso hover:text-brand-espresso font-medium flex items-center whitespace-nowrap"
-          >
-            <i className={`ri-arrow-${showAvailable ? 'up' : 'down'}-s-line mr-1`}></i>
-            {showAvailable ? 'Hide' : 'View'} available coupons
-          </button>
-
-          {showAvailable && (
-            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-              {availableCoupons.map((coupon) => {
-                const isEligible = !coupon.minPurchase || subtotal >= coupon.minPurchase;
-                const needed = coupon.minPurchase ? coupon.minPurchase - subtotal : 0;
-
-                return (
-                  <div
-                    key={coupon.code}
-                    className={`bg-white rounded-lg p-4 border-2 transition-all ${
-                      isEligible
-                        ? 'border-brand-nude/70 hover:border-brand-mauve/60'
-                        : 'border-gray-200 opacity-60'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-2">
-                        <span className="bg-brand-nude/50 text-brand-cocoa px-3 py-1 rounded-lg font-bold text-sm">
-                          {coupon.code}
-                        </span>
-                        {!isEligible && (
-                          <span className="text-xs text-gray-500">
-                            Add GH₵{needed.toFixed(2)} more
-                          </span>
-                        )}
-                      </div>
-                      {isEligible && (
-                        <button
-                          onClick={() => handleQuickApply(coupon)}
-                          className="text-brand-espresso hover:text-brand-espresso font-semibold text-sm whitespace-nowrap"
-                        >
-                          Apply
-                        </button>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600">{coupon.description}</p>
-                  </div>
-                );
-              })}
-            </div>
+          {error && (
+            <p className="text-sm text-red-600 mt-2 flex items-center">
+              <i className="ri-error-warning-line mr-1"></i>
+              {error}
+            </p>
           )}
-        </>
+        </div>
       ) : (
         <div className="bg-brand-nude/30 border-2 border-brand-nude/70 rounded-lg p-4">
           <div className="flex items-center justify-between">
@@ -181,9 +119,14 @@ export default function AdvancedCouponSystem({
                 <i className="ri-price-tag-3-fill text-brand-espresso"></i>
                 <span className="font-bold text-brand-cocoa">{appliedCoupon.code}</span>
               </div>
-              <p className="text-sm text-brand-espresso">{appliedCoupon.description}</p>
+              <p className="text-sm text-brand-espresso">
+                {appliedCoupon.freeShipping
+                  ? 'Free shipping applied'
+                  : appliedCoupon.description || `GH₵${appliedCoupon.discount.toFixed(2)} off`}
+              </p>
             </div>
             <button
+              type="button"
               onClick={onRemove}
               className="w-8 h-8 flex items-center justify-center text-brand-espresso hover:text-brand-espresso transition-colors"
             >

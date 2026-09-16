@@ -80,15 +80,34 @@ export function resolveVariantPrice(args: {
   return { effective: vPrice, originalDisplay: orig };
 }
 
+export type StorePricing = {
+  /** Merchant toggle, ignoring the schedule window. */
+  enabled: boolean;
+  /** Effective storefront flag (toggle + optional start/end dates). */
+  sales_active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  headline: string;
+};
+
 /** Parse store_pricing JSON from site_settings.value */
-export function parseStorePricingValue(
-  value: unknown
-): { sales_active: boolean } {
-  if (value && typeof value === 'object' && 'sales_active' in value) {
-    const v = (value as { sales_active?: unknown }).sales_active;
-    return { sales_active: Boolean(v) };
-  }
-  return { sales_active: false };
+export function parseStorePricingValue(value: unknown): StorePricing {
+  const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const enabled = Boolean(raw.sales_active);
+  const starts_at = typeof raw.starts_at === 'string' && raw.starts_at ? raw.starts_at : null;
+  const ends_at = typeof raw.ends_at === 'string' && raw.ends_at ? raw.ends_at : null;
+  const headline = typeof raw.headline === 'string' ? raw.headline : '';
+  const now = Date.now();
+  let inWindow = true;
+  if (starts_at && new Date(starts_at).getTime() > now) inWindow = false;
+  if (ends_at && new Date(ends_at).getTime() < now) inWindow = false;
+  return {
+    enabled,
+    sales_active: enabled && inWindow,
+    starts_at,
+    ends_at,
+    headline,
+  };
 }
 
 /** Map DB product + variants to ProductCard price props */

@@ -20,6 +20,7 @@ type CouponRow = {
   start_date: string | null;
   end_date: string | null;
   is_active: boolean;
+  created_at?: string;
 };
 
 type CouponForm = {
@@ -114,14 +115,29 @@ export default function AdminCouponsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<CouponForm>(emptyForm());
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Scheduled' | 'Expired' | 'Disabled'>('all');
+  const [sortBy, setSortBy] = useState<'date' | 'usage' | 'value'>('date');
+  const [listError, setListError] = useState<string | null>(null);
+  const [discountGiven, setDiscountGiven] = useState<number | null>(null);
 
   const fetchCoupons = useCallback(async () => {
     try {
       setLoading(true);
+      setListError(null);
       const data = await apiData<CouponRow[]>('/api/admin/coupons');
       setCoupons(data || []);
-    } catch (err) {
-      console.error(err);
+      try {
+        const analytics = await apiData<{ metrics?: { discountTotal?: number } }>(
+          '/api/admin/analytics?range=year'
+        );
+        setDiscountGiven(Number(analytics.metrics?.discountTotal || 0));
+      } catch {
+        setDiscountGiven(null);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load coupons';
+      setListError(message);
+      setCoupons([]);
     } finally {
       setLoading(false);
     }
@@ -203,13 +219,20 @@ export default function AdminCouponsPage() {
 
   const activeCoupons = coupons.filter((c) => deriveStatus(c) === 'Active');
   const totalUses = coupons.reduce((sum, c) => sum + (c.usage_count ?? 0), 0);
+  const visibleCoupons = coupons
+    .filter((c) => statusFilter === 'all' || deriveStatus(c) === statusFilter)
+    .sort((a, b) => {
+      if (sortBy === 'usage') return (b.usage_count ?? 0) - (a.usage_count ?? 0);
+      if (sortBy === 'value') return num(b.value) - num(a.value);
+      return new Date(b.created_at || b.start_date || 0).getTime() - new Date(a.created_at || a.start_date || 0).getTime();
+    });
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Coupons & Promotions</h1>
-          <p className="text-gray-600 mt-1">Create and manage discount codes</p>
+          <h1 className="text-3xl font-bold text-gray-900 font-sans tracking-normal">Coupons & Promotions</h1>
+          <p className="text-gray-600 mt-1 font-sans tracking-normal">Create and manage discount codes</p>
         </div>
         <button
           onClick={openCreate}
@@ -235,7 +258,9 @@ export default function AdminCouponsPage() {
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Total Discount</p>
-          <p className="text-2xl font-bold text-store-primary">--</p>
+          <p className="text-2xl font-bold text-store-primary">
+            {discountGiven == null ? '—' : `GH₵${money(discountGiven)}`}
+          </p>
         </div>
       </div>
 
@@ -244,16 +269,25 @@ export default function AdminCouponsPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900">All Coupons</h2>
             <div className="flex items-center space-x-3">
-              <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary font-medium cursor-pointer">
-                <option>All Status</option>
-                <option>Active</option>
-                <option>Scheduled</option>
-                <option>Expired</option>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary font-medium cursor-pointer"
+              >
+                <option value="all">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Scheduled">Scheduled</option>
+                <option value="Expired">Expired</option>
+                <option value="Disabled">Disabled</option>
               </select>
-              <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary font-medium cursor-pointer">
-                <option>Sort by Date</option>
-                <option>Sort by Usage</option>
-                <option>Sort by Value</option>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary font-medium cursor-pointer"
+              >
+                <option value="date">Sort by Date</option>
+                <option value="usage">Sort by Usage</option>
+                <option value="value">Sort by Value</option>
               </select>
             </div>
           </div>
@@ -280,14 +314,20 @@ export default function AdminCouponsPage() {
                     Loading coupons...
                   </td>
                 </tr>
-              ) : coupons.length === 0 ? (
+              ) : listError ? (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-red-600">
+                    {listError}
+                  </td>
+                </tr>
+              ) : visibleCoupons.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-gray-500">
                     No coupons found.
                   </td>
                 </tr>
               ) : (
-                coupons.map((coupon) => {
+                visibleCoupons.map((coupon) => {
                   const status = deriveStatus(coupon);
                   const typeLabel = formatTypeLabel(coupon.type);
                   const valueNum = num(coupon.value);

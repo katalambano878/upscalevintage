@@ -14,6 +14,11 @@ import {
   shippingDataToAddressInput,
   type AddressLike,
 } from '@/lib/address-map';
+import {
+  clearAppliedCoupon,
+  readAppliedCoupon,
+  type AppliedCoupon,
+} from '@/lib/coupon-session';
 
 export default function CheckoutPage() {
   usePageTitle('Checkout');
@@ -65,6 +70,7 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState('moolre');
   const [paymentOption, setPaymentOption] = useState<'full' | 'half'>('full');
   const [errors, setErrors] = useState<any>({});
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
 
 
 
@@ -106,11 +112,16 @@ export default function CheckoutPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentStep]);
 
+  useEffect(() => {
+    setAppliedCoupon(readAppliedCoupon());
+  }, []);
+
   // Calculate Totals
   const subtotal = cartSubtotal;
-  const shippingCost = 0; // Delivery options temporarily disabled
+  const shippingCost = appliedCoupon?.freeShipping ? 0 : 0; // Delivery options temporarily disabled
   const tax = 0; // No Tax
-  const total = subtotal + shippingCost + tax;
+  const couponDiscount = appliedCoupon?.discount || 0;
+  const total = Math.max(0, subtotal + shippingCost + tax - couponDiscount);
   const dueNow =
     paymentOption === 'half' ? Math.round((total / 2) * 100) / 100 : total;
   const balanceDue = Math.round((total - dueNow) * 100) / 100;
@@ -186,6 +197,7 @@ export default function CheckoutPage() {
           cart: cartPayload,
           shippingCost,
           tax,
+          couponCode: appliedCoupon?.code || null,
         },
       });
 
@@ -220,6 +232,7 @@ export default function CheckoutPage() {
 
           // Clear cart before redirecting
           clearCart();
+          clearAppliedCoupon();
 
           // Redirect to Moolre
           window.location.href = paymentResult.url;
@@ -245,6 +258,7 @@ export default function CheckoutPage() {
 
       // 6. Clear Cart & Redirect (For COD)
       clearCart();
+      clearAppliedCoupon();
       router.push(`/order-success?order=${orderNumber}`);
 
     } catch (err: any) {
@@ -713,6 +727,8 @@ export default function CheckoutPage() {
               dueNow={dueNow}
               balanceDue={paymentOption === 'half' ? balanceDue : 0}
               paymentOption={paymentOption}
+              discount={couponDiscount}
+              couponCode={appliedCoupon?.code}
             />
           </div>
         </div>

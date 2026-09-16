@@ -27,9 +27,19 @@
   .admin-shell select,
   .admin-shell textarea,
   .admin-shell th,
-  .admin-shell td {
-    font-family: Manrope, system-ui, sans-serif;
-    letter-spacing: 0;
+  .admin-shell td,
+  .admin-shell span,
+  .admin-shell option {
+    font-family: Manrope, system-ui, sans-serif !important;
+    letter-spacing: 0.01em !important;
+    word-spacing: 0.04em;
+  }
+
+  .admin-shell input::placeholder,
+  .admin-shell textarea::placeholder {
+    font-family: Manrope, system-ui, sans-serif !important;
+    letter-spacing: 0.01em !important;
+    word-spacing: 0.06em;
   }
 
   p {

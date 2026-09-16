@@ -24,6 +24,7 @@ export default function ProductsPage() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'draft' | 'archived'>('active');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<any[]>([]);
@@ -204,10 +205,14 @@ export default function ProductsPage() {
   };
 
   const filteredProducts = products.filter(product => {
-    const term = searchQuery.toLowerCase();
-    return (product.name || '').toLowerCase().includes(term) ||
-      (product.sku && product.sku.toLowerCase().includes(term)) ||
-      (product.category && product.category.toLowerCase().includes(term));
+    const term = searchQuery.toLowerCase().trim();
+    const matchesSearch =
+      !term ||
+      (product.name || '').toLowerCase().includes(term) ||
+      (product.sku && String(product.sku).toLowerCase().includes(term)) ||
+      (product.category && String(product.category).toLowerCase().includes(term));
+    const matchesCategory = !categoryFilter || product.category === categoryFilter;
+    return matchesSearch && matchesCategory;
   });
 
   return (
@@ -301,9 +306,17 @@ export default function ProductsPage() {
 
           {showFilters && (
             <div className="mt-4 p-4 bg-gray-50 rounded-lg grid md:grid-cols-4 gap-4">
-              <select className="px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer"
+              >
                 <option value="">All Categories</option>
-                {categories.map((cat: any) => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
+                {categories.map((cat: any) => (
+                  <option key={cat.id || cat.name} value={cat.name}>
+                    {cat.name}
+                  </option>
+                ))}
               </select>
               <select
                 value={statusFilter}
