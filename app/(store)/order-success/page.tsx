@@ -3,8 +3,15 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect, useMemo } from 'react';
-import { apiData, apiPost, apiPatch, apiDelete, readJsonOrThrow } from '@/lib/client/api';
+import { apiData, readJsonOrThrow } from '@/lib/client/api';
 import { asNumber, money } from '@/lib/format-money';
+import {
+  formatDeliveryMethod,
+  deliveryMethodHint,
+  isStorePickup,
+  pickupLocation,
+  resolveDeliveryMethod,
+} from '@/lib/delivery';
 
 function OrderSuccessContent() {
   const searchParams = useSearchParams();
@@ -125,6 +132,10 @@ function OrderSuccessContent() {
   }
 
   const orderDate = new Date(order.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const deliveryMethod = resolveDeliveryMethod(order);
+  const pickup = isStorePickup(deliveryMethod);
+  const deliveryLabel = formatDeliveryMethod(deliveryMethod);
+  const deliveryHint = deliveryMethodHint(deliveryMethod);
   const estimatedDelivery = new Date(new Date(order.created_at).getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const pointsEarned = Math.floor(asNumber(order.total) / 10);
   const orderItems = Array.isArray(order.order_items) ? order.order_items : [];
@@ -163,7 +174,7 @@ function OrderSuccessContent() {
             </h1>
             <p className="text-xl text-gray-600 mb-8">
               {order.payment_status === 'partially_paid'
-                ? `Thank you. Half payment received. Remaining GH₵ ${money(balanceDue)} is due before pickup or delivery.`
+                ? `Thank you. Half payment received. Remaining GH₵ ${money(balanceDue)} is due before ${pickup ? 'store pickup' : 'delivery'}.`
                 : order.payment_status === 'paid'
                   ? "Thank you for your purchase. We're processing your order now."
                   : 'Thank you. Your order was placed — complete payment if you have not already.'}
@@ -188,8 +199,11 @@ function OrderSuccessContent() {
                   <p className="text-lg font-bold text-gray-900">{orderDate}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Estimated Delivery</p>
-                  <p className="text-lg font-bold text-store-ink">{estimatedDelivery}</p>
+                  <p className="text-sm text-gray-600 mb-1">Delivery</p>
+                  <p className="text-lg font-bold text-store-ink">{deliveryLabel}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {pickup ? 'Ready in 24 hours' : estimatedDelivery}
+                  </p>
                 </div>
               </div>
             </div>
@@ -281,7 +295,17 @@ function OrderSuccessContent() {
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Delivery Details</h2>
               <div className="space-y-3">
-                {order.shipping_address && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Method</p>
+                  <p className="font-semibold text-gray-900">{deliveryLabel}</p>
+                  {deliveryHint && <p className="text-sm text-gray-600">{deliveryHint}</p>}
+                </div>
+                {pickup ? (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Pickup location</p>
+                    <p className="text-gray-900">{pickupLocation()}</p>
+                  </div>
+                ) : order.shipping_address ? (
                   <>
                     <div>
                       <p className="text-sm text-gray-600 mb-1">Recipient</p>
@@ -295,15 +319,19 @@ function OrderSuccessContent() {
                       <p className="text-gray-900">{order.shipping_address.city}, {order.shipping_address.region}</p>
                       <p className="text-gray-900">{order.shipping_address.postalCode}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600 mb-1">Phone</p>
-                      <p className="text-gray-900">{order.phone}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 mb-1">Email</p>
-                      <p className="text-gray-900">{order.email}</p>
-                    </div>
                   </>
+                ) : null}
+                {order.phone && (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Phone</p>
+                    <p className="text-gray-900">{order.phone}</p>
+                  </div>
+                )}
+                {order.email && (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Email</p>
+                    <p className="text-gray-900">{order.email}</p>
+                  </div>
                 )}
               </div>
 
@@ -325,10 +353,16 @@ function OrderSuccessContent() {
                     </div>
                   </div>
                   <div className="flex items-start space-x-3">
-                    <i className="ri-truck-line text-store-ink mt-1"></i>
+                    <i className={`${pickup ? 'ri-store-2-line' : 'ri-truck-line'} text-store-ink mt-1`}></i>
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">Shipping Updates</p>
-                      <p className="text-sm text-gray-600">Track via email & SMS</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {pickup ? 'Ready for pickup' : 'Shipping updates'}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {pickup
+                          ? 'We will tell you when it is ready to collect'
+                          : 'Track via email and SMS'}
+                      </p>
                     </div>
                   </div>
                 </div>

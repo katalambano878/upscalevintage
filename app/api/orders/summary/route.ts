@@ -35,6 +35,7 @@ function redactOrderSummary(order: Record<string, unknown>) {
     total: order.total,
     subtotal: order.subtotal,
     shipping_total: order.shipping_total,
+    shipping_method: order.shipping_method,
     tax_total: order.tax_total,
     currency: order.currency,
     created_at: order.created_at,
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
 
     const order = await queryOne(
       `SELECT id, order_number, status, payment_status, total, subtotal, shipping_total,
-              tax_total, currency, created_at, email, phone, shipping_address, metadata,
+              shipping_method, tax_total, currency, created_at, email, phone, shipping_address, metadata,
         COALESCE(
           (SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.created_at)
            FROM order_items oi WHERE oi.order_id = o.id),

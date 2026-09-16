@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { apiData } from '@/lib/client/api';
 import { asNumber, money } from '@/lib/format-money';
+import { formatDeliveryMethod, resolveDeliveryMethod } from '@/lib/delivery';
 import ProductSalesStats from './ProductSalesStats';
 
 interface Order {
@@ -540,6 +541,9 @@ export default function AdminOrdersPage() {
                       <Link href={`/admin/orders/${order.id}`} className="text-store-ink hover:text-store-ink font-semibold whitespace-nowrap cursor-pointer">
                         {order.order_number || order.id.substring(0, 8)}
                       </Link>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {formatDeliveryMethod(resolveDeliveryMethod(order))}
+                      </p>
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center space-x-3">

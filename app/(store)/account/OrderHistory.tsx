@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { apiData } from '@/lib/client/api';
 import { useCart } from '@/context/CartContext';
+import { formatDeliveryMethod, resolveDeliveryMethod } from '@/lib/delivery';
 
 interface OrderItem {
   id: string;
@@ -24,6 +25,7 @@ interface Order {
   date: string;
   status: string;
   total: number;
+  deliveryLabel: string;
   items: OrderItem[];
 }
 
@@ -49,6 +51,7 @@ export default function OrderHistory() {
           date: order.created_at,
           status: order.status,
           total: Number(order.total) || 0,
+          deliveryLabel: formatDeliveryMethod(resolveDeliveryMethod(order)),
           items: (order.order_items || []).map((item: any) => ({
             id: item.id,
             productId: item.product_id || null,
@@ -200,6 +203,10 @@ export default function OrderHistory() {
                     <div>
                       <p className="text-xs text-gray-600 mb-1">Total</p>
                       <p className="font-bold text-store-primary">GH₵{order.total.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600 mb-1">Delivery</p>
+                      <p className="font-semibold text-gray-900">{order.deliveryLabel}</p>
                     </div>
                   </div>
                   <span

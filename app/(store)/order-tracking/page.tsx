@@ -3,7 +3,14 @@
 import Link from 'next/link';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { apiData } from '@/lib/client/api';
+import {
+  formatDeliveryMethod,
+  deliveryMethodHint,
+  isStorePickup,
+  pickupLocation,
+  resolveDeliveryMethod,
+} from '@/lib/delivery';
 
 function OrderTrackingContent() {
   const searchParams = useSearchParams();
@@ -82,6 +89,7 @@ function OrderTrackingContent() {
     const statusOrder = ['pending', 'processing', 'shipped', 'delivered'];
     const currentIndex = statusOrder.indexOf(status);
 
+    const pickup = isStorePickup(resolveDeliveryMethod(order));
     const steps = [
       {
         key: 'placed',
@@ -113,18 +121,18 @@ function OrderTrackingContent() {
       },
       {
         key: 'shipped',
-        title: 'Packaged',
-        description: 'Your order has been packaged',
-        date: currentIndex >= 2 ? 'Packaged' : 'Pending',
-        icon: 'ri-truck-line',
+        title: pickup ? 'Ready for pickup' : 'Packaged',
+        description: pickup ? 'Your order is ready to collect' : 'Your order has been packaged',
+        date: currentIndex >= 2 ? (pickup ? 'Ready' : 'Packaged') : 'Pending',
+        icon: pickup ? 'ri-store-2-line' : 'ri-truck-line',
         status: currentIndex >= 2 ? 'completed' as const : currentIndex === 1 ? 'active' as const : 'pending' as const
       },
       {
         key: 'delivered',
-        title: 'Delivered',
-        description: 'Your order has been delivered',
-        date: currentIndex >= 3 ? 'Delivered' : 'Pending',
-        icon: 'ri-home-smile-line',
+        title: pickup ? 'Collected' : 'Delivered',
+        description: pickup ? 'You have collected your order' : 'Your order has been delivered',
+        date: currentIndex >= 3 ? (pickup ? 'Collected' : 'Delivered') : 'Pending',
+        icon: pickup ? 'ri-hand-heart-line' : 'ri-home-smile-line',
         status: currentIndex >= 3 ? 'completed' as const : currentIndex === 2 ? 'active' as const : 'pending' as const
       }
     ];
@@ -134,12 +142,13 @@ function OrderTrackingContent() {
 
   const getStatusBadge = () => {
     if (!order) return { label: 'Unknown', color: 'bg-gray-100 text-gray-800' };
-    
+    const pickup = isStorePickup(resolveDeliveryMethod(order));
+
     const statusMap: Record<string, { label: string; color: string }> = {
       'pending': { label: 'Pending', color: 'bg-amber-100 text-amber-800' },
       'processing': { label: 'Processing', color: 'bg-store-surface text-store-ink' },
-      'shipped': { label: 'Packaged', color: 'bg-store-primary/15 text-store-ink' },
-      'delivered': { label: 'Delivered', color: 'bg-store-surface text-store-ink' },
+      'shipped': { label: pickup ? 'Ready for pickup' : 'Packaged', color: 'bg-store-primary/15 text-store-ink' },
+      'delivered': { label: pickup ? 'Collected' : 'Delivered', color: 'bg-store-surface text-store-ink' },
       'cancelled': { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
     };
 
@@ -233,6 +242,10 @@ function OrderTrackingContent() {
   const statusBadge = getStatusBadge();
   const trackingNumber = order.metadata?.tracking_number || '';
   const shippingAddress = order.shipping_address || {};
+  const deliveryMethod = resolveDeliveryMethod(order);
+  const pickup = isStorePickup(deliveryMethod);
+  const deliveryLabel = formatDeliveryMethod(deliveryMethod);
+  const deliveryHint = deliveryMethodHint(deliveryMethod);
   const estimatedDelivery = new Date(new Date(order.created_at).getTime() + 7 * 24 * 60 * 60 * 1000)
     .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -259,7 +272,11 @@ function OrderTrackingContent() {
                   <span className="font-mono bg-gray-100 px-2 py-0.5 rounded text-sm">{trackingNumber}</span>
                 </p>
               )}
-              <p className="text-gray-500 text-sm mt-1">Estimated delivery: {estimatedDelivery}</p>
+              <p className="text-gray-500 text-sm mt-1">
+                {deliveryLabel}
+                {pickup ? ' · Ready in 24 hours' : ` · Estimated delivery: ${estimatedDelivery}`}
+              </p>
+              {deliveryHint && <p className="text-gray-500 text-sm mt-1">{deliveryHint}</p>}
             </div>
             <div className={`px-4 py-2 rounded-full font-semibold whitespace-nowrap ${statusBadge.color}`}>
               {statusBadge.label}
@@ -270,12 +287,14 @@ function OrderTrackingContent() {
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 flex items-center justify-center bg-store-surface rounded-full">
-                  <i className="ri-map-pin-line text-xl text-store-ink"></i>
+                  <i className={`${pickup ? 'ri-store-2-line' : 'ri-map-pin-line'} text-xl text-store-ink`}></i>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Shipping To</p>
+                  <p className="text-sm text-gray-600">{pickup ? 'Pickup at' : 'Shipping To'}</p>
                   <p className="font-semibold text-gray-900">
-                    {shippingAddress.city || shippingAddress.region || 'Ghana'}
+                    {pickup
+                      ? pickupLocation()
+                      : shippingAddress.city || shippingAddress.region || 'Ghana'}
                   </p>
                 </div>
               </div>

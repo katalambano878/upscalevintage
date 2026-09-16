@@ -143,6 +143,7 @@ export async function createOrderFromCheckout(input: {
           tracking_number: input.trackingNumber,
           payment_method: input.paymentMethod,
           payment_option: plan.option,
+          delivery_method: input.deliveryMethod,
           amount_paid: 0,
           balance_due: plan.option === 'half' ? plan.balanceDue : 0,
           due_now: plan.dueNow,
@@ -245,7 +246,7 @@ export async function getOrderById(id: string, userId?: string | null, isStaff?:
 export async function trackOrder(email: string, orderNumber: string) {
   const row = await queryOne(
     `SELECT o.id, o.order_number, o.status, o.payment_status, o.total, o.email, o.created_at,
-            o.shipping_address, o.metadata,
+            o.shipping_method, o.shipping_address, o.metadata,
       COALESCE(
         (SELECT jsonb_agg(
           jsonb_build_object(

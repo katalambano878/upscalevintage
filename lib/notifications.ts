@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 import { query } from '@/lib/db';
 import { escapeHtml } from '@/lib/sanitize';
 import { APP_TITLE, EMAIL_FROM_DEFAULT, ADMIN_EMAIL_DEFAULT } from '@/lib/brand';
+import { formatDeliveryMethod, resolveDeliveryMethod } from '@/lib/delivery';
 
 const resend = new Resend(process.env.RESEND_API_KEY || 'missing_api_key');
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || ADMIN_EMAIL_DEFAULT;
@@ -185,7 +186,10 @@ export async function sendSMS({ to, message }: { to: string; message: string }) 
 }
 
 export async function sendOrderConfirmation(order: any) {
-    const { id, email, phone: orderPhone, shipping_address, total, created_at, order_number, metadata } = order;
+    const { id, email, phone: orderPhone, shipping_address, total, created_at, order_number, metadata, shipping_method } = order;
+    const deliveryLabel = formatDeliveryMethod(
+      resolveDeliveryMethod({ shipping_method, metadata })
+    );
 
     const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
@@ -252,6 +256,7 @@ export async function sendOrderConfirmation(order: any) {
   ${emailInfoRow('Order Number', `#${order_number || id}`)}
   ${emailInfoRow('Order Date', new Date(created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))}
   ${trackingNumber ? emailInfoRow('Tracking', trackingNumber) : ''}
+  ${emailInfoRow('Delivery', deliveryLabel)}
   ${emailInfoRow('Total', `GH₵${Number(total).toFixed(2)}`)}
 </table>
 
@@ -279,6 +284,7 @@ ${emailButton('Track Your Order', trackingUrl)}
   ${emailInfoRow('Customer', `${name}`)}
   ${emailInfoRow('Email', email)}
   ${emailInfoRow('Total', `GH₵${Number(total).toFixed(2)}`)}
+  ${emailInfoRow('Delivery', deliveryLabel)}
   ${trackingNumber ? emailInfoRow('Tracking', trackingNumber) : ''}
 </table>
 

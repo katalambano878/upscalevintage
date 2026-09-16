@@ -2,9 +2,16 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
-import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { apiData } from '@/lib/client/api';
 import { money } from '@/lib/format-money';
 import FraudDetectionAlert from '@/components/FraudDetectionAlert';
+import {
+  formatDeliveryMethod,
+  deliveryMethodHint,
+  isStorePickup,
+  pickupLocation,
+  resolveDeliveryMethod,
+} from '@/lib/delivery';
 
 interface OrderDetailClientProps {
   orderId: string;
@@ -205,6 +212,9 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
   const currentStatus = order.status || 'pending';
   const shippingAddress = order.shipping_address || {};
+  const deliveryMethod = resolveDeliveryMethod(order);
+  const deliveryLabel = formatDeliveryMethod(deliveryMethod);
+  const pickup = isStorePickup(deliveryMethod);
   const customerName = (shippingAddress.firstName && shippingAddress.lastName)
     ? `${shippingAddress.firstName.trim()} ${shippingAddress.lastName.trim()}`
     : shippingAddress.full_name || shippingAddress.firstName || order.email?.split('@')[0] || 'Customer';
@@ -289,7 +299,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
           {/* Order Summary */}
           <div className="flex justify-between mb-6">
             <div>
-              <p><span className="font-semibold">Shipping Method:</span> {order?.shipping_method || 'Standard'}</p>
+              <p><span className="font-semibold">Delivery:</span> {deliveryLabel}</p>
               <p><span className="font-semibold">Payment:</span> {order?.payment_method} ({order?.payment_status})</p>
               {trackingNumber && <p><span className="font-semibold">Tracking #:</span> {trackingNumber}</p>}
             </div>
@@ -489,18 +499,31 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">Shipping Address</h2>
-              <div className="text-gray-700 space-y-1">
-                {/* Support both old field names (address_line1) and new (address) */}
-                <p>{shippingAddress.address || shippingAddress.address_line1}</p>
-                {(shippingAddress.address_line2) && <p>{shippingAddress.address_line2}</p>}
-                <p>
-                  {shippingAddress.city}
-                  {(shippingAddress.region || shippingAddress.state) && `, ${shippingAddress.region || shippingAddress.state}`}
+              <h2 className="text-lg font-bold text-gray-900 mb-4">Delivery</h2>
+              <p className="font-semibold text-gray-900">{deliveryLabel}</p>
+              {deliveryMethodHint(deliveryMethod) && (
+                <p className="text-sm text-gray-600 mt-1">
+                  {deliveryMethodHint(deliveryMethod)}
                 </p>
-                {shippingAddress.postal_code && <p>{shippingAddress.postal_code}</p>}
-                {shippingAddress.country && <p className="font-semibold">{shippingAddress.country}</p>}
-              </div>
+              )}
+              {pickup ? (
+                <div className="text-gray-700 space-y-1 mt-4">
+                  <p className="text-sm text-gray-600">Pickup location</p>
+                  <p>{pickupLocation()}</p>
+                </div>
+              ) : (
+                <div className="text-gray-700 space-y-1 mt-4">
+                  <p className="text-sm text-gray-600">Shipping address</p>
+                  <p>{shippingAddress.address || shippingAddress.address_line1}</p>
+                  {shippingAddress.address_line2 && <p>{shippingAddress.address_line2}</p>}
+                  <p>
+                    {shippingAddress.city}
+                    {(shippingAddress.region || shippingAddress.state) && `, ${shippingAddress.region || shippingAddress.state}`}
+                  </p>
+                  {shippingAddress.postal_code && <p>{shippingAddress.postal_code}</p>}
+                  {shippingAddress.country && <p className="font-semibold">{shippingAddress.country}</p>}
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

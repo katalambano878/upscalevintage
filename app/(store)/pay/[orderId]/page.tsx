@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { apiData, apiPost, apiPatch, apiDelete, readJsonOrThrow } from '@/lib/client/api';
+import { apiData, readJsonOrThrow } from '@/lib/client/api';
+import { formatDeliveryMethod, isStorePickup, resolveDeliveryMethod } from '@/lib/delivery';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 function money(n: unknown): number {
@@ -129,6 +130,9 @@ export default function PaymentPage() {
 
   const shippingAddress = order?.shipping_address || {};
   const customerName = order?.metadata?.first_name || shippingAddress.firstName || 'Customer';
+  const deliveryMethod = resolveDeliveryMethod(order);
+  const deliveryLabel = formatDeliveryMethod(deliveryMethod);
+  const pickup = isStorePickup(deliveryMethod);
 
   return (
     <main className="min-h-screen bg-gray-50 py-12 px-4">
@@ -143,7 +147,7 @@ export default function PaymentPage() {
           <p className="text-gray-600 mt-2">
             Hi {customerName},{' '}
             {isBalancePayment
-              ? 'pay the remaining balance before pickup or delivery.'
+              ? `pay the remaining balance before ${pickup ? 'store pickup' : 'delivery'}.`
               : 'your order is waiting for payment.'}
           </p>
         </div>
@@ -165,6 +169,10 @@ export default function PaymentPage() {
                 <span className="text-green-700">GH₵ {amountPaid.toFixed(2)}</span>
               </div>
             )}
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Delivery</span>
+              <span className="text-gray-900">{deliveryLabel}</span>
+            </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Shipping</span>
               <span className="text-gray-900">GH₵ {money(order?.shipping_total).toFixed(2)}</span>
@@ -200,7 +208,7 @@ export default function PaymentPage() {
               <div>
                 <p className="text-sm font-semibold text-amber-900">Half payment received</p>
                 <p className="text-sm text-amber-800 mt-1">
-                  Remaining balance must be paid before pickup or delivery.
+                  Remaining balance must be paid before {pickup ? 'store pickup' : 'delivery'}.
                 </p>
               </div>
             </div>
