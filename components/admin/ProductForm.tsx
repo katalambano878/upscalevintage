@@ -5,6 +5,9 @@ import { useState, useEffect } from 'react';
 import { apiData, apiPatch } from '@/lib/client/api';
 import { useRouter } from 'next/navigation';
 import { buildProductSeo, slugifyProduct } from '@/lib/product-seo';
+import { buildVariantSku, colorHexForName } from '@/lib/variant-presets';
+import ProductVariantsEditor, { type VariantRow, variantKey } from '@/components/admin/ProductVariantsEditor';
+import ProductSeoEditor from '@/components/admin/ProductSeoEditor';
 
 interface ProductFormProps {
     initialData?: any;
@@ -47,45 +50,19 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         return `${prefix}-${timestamp}-${random}`;
     };
 
-    // --- Variant System ---
-    // Preset color palette
-    const colorPresets = [
-        { name: 'Black', hex: '#000000' },
-        { name: 'White', hex: '#FFFFFF' },
-        { name: 'Red', hex: '#EF4444' },
-        { name: 'Blue', hex: '#3B82F6' },
-        { name: 'Navy', hex: '#1E3A5F' },
-        { name: 'Green', hex: '#22C55E' },
-        { name: 'Yellow', hex: '#EAB308' },
-        { name: 'Pink', hex: '#EC4899' },
-        { name: 'Purple', hex: '#A855F7' },
-        { name: 'Orange', hex: '#F97316' },
-        { name: 'Gray', hex: '#6B7280' },
-        { name: 'Brown', hex: '#92400E' },
-        { name: 'Beige', hex: '#D2B48C' },
-        { name: 'Maroon', hex: '#800000' },
-        { name: 'Teal', hex: '#14B8A6' },
-        { name: 'Cream', hex: '#FFFDD0' },
-        { name: 'Gold', hex: '#D4AF37' },
-        { name: 'Silver', hex: '#C0C0C0' },
-    ];
-    const sizePresets = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'One Size'];
-    const numericSizePresets = ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45'];
-
-    // Parse existing variants to extract unique colors and sizes
     const existingVariants = (initialData?.product_variants || []).map((v: any) => ({
         ...v,
         stock: v.stock ?? v.quantity ?? 0,
         color: v.color ?? v.option2 ?? '',
-        size: v.option1 || v.size || v.name || ''
+        size: v.option1 || v.size || v.name || '',
+        hex: v.metadata?.color_hex || '',
     }));
 
     const [selectedColors, setSelectedColors] = useState<{ name: string; hex: string }[]>(() => {
         const colors = new Map<string, string>();
         existingVariants.forEach((v: any) => {
             if (v.color) {
-                const preset = colorPresets.find(c => c.name.toLowerCase() === v.color.toLowerCase());
-                colors.set(v.color, preset?.hex || '#888888');
+                colors.set(v.color, v.hex || colorHexForName(v.color));
             }
         });
         return Array.from(colors.entries()).map(([name, hex]) => ({ name, hex }));
@@ -99,27 +76,17 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         return Array.from(sizes);
     });
 
-    const [customColorName, setCustomColorName] = useState('');
-    const [customColorHex, setCustomColorHex] = useState('#888888');
-    const [customSize, setCustomSize] = useState('');
-
-    // Build variants from colors × sizes (or just sizes, or just colors)
-    const buildVariantKey = (color: string, size: string) => `${color}|||${size}`;
-
-    // Store variant data (price, stock) in a map keyed by "color|||size"
-    const emptyVariantRow = () => ({
+    const emptyVariantRow = (): VariantRow => ({
         price: price,
         stock: '0',
         sku: '',
         salePrice: '',
     });
 
-    const [variantData, setVariantData] = useState<
-        Record<string, { price: string; stock: string; sku: string; salePrice: string }>
-    >(() => {
-        const data: Record<string, { price: string; stock: string; sku: string; salePrice: string }> = {};
+    const [variantData, setVariantData] = useState<Record<string, VariantRow>>(() => {
+        const data: Record<string, VariantRow> = {};
         existingVariants.forEach((v: any) => {
-            const key = buildVariantKey(v.color || '', v.size || '');
+            const key = variantKey(v.color || '', v.size || '');
             data[key] = {
                 price: v.price?.toString() || '',
                 stock: v.stock?.toString() || '0',
@@ -142,7 +109,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         for (const color of colors) {
             for (const size of sizes) {
                 if (!color.name && !size) continue; // skip if both empty
-                const key = buildVariantKey(color.name, size);
+                const key = variantKey(color.name, size);
                 combos.push({ color: color.name, colorHex: color.hex, size, key });
             }
         }
@@ -162,59 +129,6 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         };
     });
 
-    const updateVariantField = (key: string, field: string, value: string) => {
-        setVariantData(prev => ({
-            ...prev,
-            [key]: { ...prev[key] || emptyVariantRow(), [field]: value },
-        }));
-    };
-
-    const bulkSetField = (field: 'price' | 'stock' | 'salePrice', value: string) => {
-        setVariantData(prev => {
-            const updated = { ...prev };
-            variantCombinations.forEach(combo => {
-                updated[combo.key] = {
-                    ...updated[combo.key] || emptyVariantRow(),
-                    [field]: value,
-                };
-            });
-            return updated;
-        });
-    };
-
-    const toggleColor = (color: { name: string; hex: string }) => {
-        setSelectedColors(prev => {
-            const exists = prev.find(c => c.name === color.name);
-            if (exists) return prev.filter(c => c.name !== color.name);
-            return [...prev, color];
-        });
-    };
-
-    const toggleSize = (size: string) => {
-        setSelectedSizes(prev => {
-            if (prev.includes(size)) return prev.filter(s => s !== size);
-            return [...prev, size];
-        });
-    };
-
-    const addCustomColor = () => {
-        if (!customColorName.trim()) return;
-        const exists = selectedColors.find(c => c.name.toLowerCase() === customColorName.trim().toLowerCase());
-        if (!exists) {
-            setSelectedColors(prev => [...prev, { name: customColorName.trim(), hex: customColorHex }]);
-        }
-        setCustomColorName('');
-        setCustomColorHex('#888888');
-    };
-
-    const addCustomSize = () => {
-        if (!customSize.trim()) return;
-        if (!selectedSizes.includes(customSize.trim())) {
-            setSelectedSizes(prev => [...prev, customSize.trim()]);
-        }
-        setCustomSize('');
-    };
-
     // Images
     const [images, setImages] = useState<any[]>(initialData?.product_images || []);
     const [uploading, setUploading] = useState(false);
@@ -230,11 +144,12 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const [seoTitleManual, setSeoTitleManual] = useState(Boolean(isEditMode && initialData?.seo_title));
     const [seoDescManual, setSeoDescManual] = useState(Boolean(isEditMode && initialData?.seo_description));
     const [keywordsManual, setKeywordsManual] = useState(Boolean(isEditMode && initialData?.tags?.length));
+    const [focusKeyword, setFocusKeyword] = useState(initialData?.metadata?.seo_focus_keyword || '');
 
     const tabs = [
         { id: 'general', label: 'General', icon: 'ri-information-line' },
         { id: 'pricing', label: 'Pricing & Inventory', icon: 'ri-price-tag-3-line' },
-        { id: 'variants', label: 'Variants', icon: 'ri-layout-grid-line' },
+        { id: 'variants', label: variants.length ? `Variants (${variants.length})` : 'Variants', icon: 'ri-layout-grid-line' },
         { id: 'images', label: 'Images', icon: 'ri-image-line' },
         { id: 'seo', label: 'SEO', icon: 'ri-search-line' }
     ];
@@ -266,16 +181,19 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             description,
             categoryName,
             siteName: process.env.NEXT_PUBLIC_SITE_NAME || 'Upscale Vintage',
+            focusKeyword: force ? '' : focusKeyword,
         });
         if (force || !slugManual) setUrlSlug(seo.slug);
         if (force || !seoTitleManual) setSeoTitle(seo.seo_title);
         if (force || !seoDescManual) setMetaDescription(seo.seo_description);
         if (force || !keywordsManual) setKeywords(seo.tags.join(', '));
+        if (force || !focusKeyword) setFocusKeyword(seo.focus_keyword);
         if (force) {
             setSlugManual(false);
             setSeoTitleManual(false);
             setSeoDescManual(false);
             setKeywordsManual(false);
+            setFocusKeyword(seo.focus_keyword);
         }
     };
 
@@ -361,7 +279,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 tags: (keywords as string).split(',').map((k: string) => k.trim()).filter(Boolean),
                 metadata: {
                     low_stock_threshold: parseInt(lowStockThreshold) || 5,
-                    preorder_shipping: preorderShipping.trim() || null
+                    preorder_shipping: preorderShipping.trim() || null,
+                    seo_focus_keyword: focusKeyword.trim() || null,
                 }
             };
 
@@ -379,7 +298,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     const vSale = v.salePrice?.trim() ? parseFloat(v.salePrice) : NaN;
                     return {
                         name: v.name || v.color || 'Default',
-                        sku: v.sku || null,
+                        sku: v.sku || buildVariantSku(sku, v.color, v.name),
                         price: parseFloat(v.price) || 0,
                         sale_price: !Number.isNaN(vSale) && vSale > 0 ? vSale : null,
                         quantity: parseInt(v.stock) || 0,
@@ -778,311 +697,17 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     )}
 
                     {activeTab === 'variants' && (
-                        <div className="space-y-8">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-900">Product Variants</h3>
-                                <p className="text-gray-600 mt-1">Select colors and sizes below — variants are generated automatically</p>
-                            </div>
-
-                            {/* STEP 1: Colors */}
-                            <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-                                <h4 className="text-sm font-bold text-gray-900 mb-1 flex items-center">
-                                    <i className="ri-palette-line mr-2 text-lg text-store-ink"></i>
-                                    Step 1: Select Colors
-                                    {selectedColors.length > 0 && (
-                                        <span className="ml-2 bg-store-surface text-store-ink text-xs font-semibold px-2 py-0.5 rounded-full">
-                                            {selectedColors.length} selected
-                                        </span>
-                                    )}
-                                </h4>
-                                <p className="text-xs text-gray-500 mb-4">Click colors to add/remove. Skip if product has no color options.</p>
-
-                                <div className="flex flex-wrap gap-2 mb-4">
-                                    {colorPresets.map(color => {
-                                        const isSelected = selectedColors.some(c => c.name === color.name);
-                                        return (
-                                            <button
-                                                key={color.name}
-                                                type="button"
-                                                onClick={() => toggleColor(color)}
-                                                className={`flex items-center space-x-2 px-3 py-2 rounded-lg border-2 transition-all text-sm font-medium ${isSelected
-                                                        ? 'border-store-muted bg-store-surface ring-1 ring-store-primary'
-                                                        : 'border-gray-200 hover:border-gray-300 bg-white'
-                                                    }`}
-                                                title={color.name}
-                                            >
-                                                <span
-                                                    className="w-5 h-5 rounded-full border border-gray-300 flex-shrink-0"
-                                                    style={{ backgroundColor: color.hex }}
-                                                ></span>
-                                                <span className={isSelected ? 'text-store-ink' : 'text-gray-700'}>{color.name}</span>
-                                                {isSelected && <i className="ri-check-line text-store-ink"></i>}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* Custom color */}
-                                <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
-                                    <input
-                                        type="color"
-                                        value={customColorHex}
-                                        onChange={(e) => setCustomColorHex(e.target.value)}
-                                        className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5"
-                                        title="Pick a custom color"
-                                    />
-                                    <input
-                                        type="text"
-                                        value={customColorName}
-                                        onChange={(e) => setCustomColorName(e.target.value)}
-                                        placeholder="Custom color name"
-                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                        onKeyDown={(e) => e.key === 'Enter' && addCustomColor()}
-                                    />
-                                    <button
-                                        onClick={addCustomColor}
-                                        disabled={!customColorName.trim()}
-                                        className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        Add Color
-                                    </button>
-                                </div>
-
-                                {/* Selected colors summary */}
-                                {selectedColors.length > 0 && (
-                                    <div className="mt-4 flex flex-wrap gap-2">
-                                        {selectedColors.map(color => (
-                                            <span key={color.name} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-sm shadow-sm">
-                                                <span className="w-3.5 h-3.5 rounded-full border border-gray-300" style={{ backgroundColor: color.hex }}></span>
-                                                {color.name}
-                                                <button onClick={() => toggleColor(color)} className="text-gray-400 hover:text-red-500 ml-1">
-                                                    <i className="ri-close-line text-sm"></i>
-                                                </button>
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* STEP 2: Sizes */}
-                            <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-                                <h4 className="text-sm font-bold text-gray-900 mb-1 flex items-center">
-                                    <i className="ri-ruler-line mr-2 text-lg text-store-muted"></i>
-                                    Step 2: Select Sizes
-                                    {selectedSizes.length > 0 && (
-                                        <span className="ml-2 bg-store-surface text-store-ink text-xs font-semibold px-2 py-0.5 rounded-full">
-                                            {selectedSizes.length} selected
-                                        </span>
-                                    )}
-                                </h4>
-                                <p className="text-xs text-gray-500 mb-4">Click sizes to add/remove. Use custom for volumes (100ml), weights, etc.</p>
-
-                                <div className="flex flex-wrap gap-2 mb-3">
-                                    {sizePresets.map(size => {
-                                        const isSelected = selectedSizes.includes(size);
-                                        return (
-                                            <button
-                                                key={size}
-                                                type="button"
-                                                onClick={() => toggleSize(size)}
-                                                className={`px-5 py-2.5 rounded-lg border-2 font-semibold text-sm transition-all ${isSelected
-                                                        ? 'border-store-muted bg-store-surface text-store-ink ring-1 ring-store-primary'
-                                                        : 'border-gray-200 hover:border-gray-300 bg-white text-gray-700'
-                                                    }`}
-                                            >
-                                                {size}
-                                                {isSelected && <i className="ri-check-line ml-1.5 text-store-muted"></i>}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                                <p className="text-xs text-gray-500 mb-2">Shoe / numeric sizes</p>
-                                <div className="flex flex-wrap gap-2 mb-4">
-                                    {numericSizePresets.map(size => {
-                                        const isSelected = selectedSizes.includes(size);
-                                        return (
-                                            <button
-                                                key={size}
-                                                type="button"
-                                                onClick={() => toggleSize(size)}
-                                                className={`px-4 py-2 rounded-lg border-2 font-semibold text-sm transition-all ${isSelected
-                                                        ? 'border-store-muted bg-store-surface text-store-ink ring-1 ring-store-primary'
-                                                        : 'border-gray-200 hover:border-gray-300 bg-white text-gray-700'
-                                                    }`}
-                                            >
-                                                {size}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* Custom size */}
-                                <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
-                                    <input
-                                        type="text"
-                                        value={customSize}
-                                        onChange={(e) => setCustomSize(e.target.value)}
-                                        placeholder="Custom size (e.g. 100ml, One Size, 42)"
-                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                        onKeyDown={(e) => e.key === 'Enter' && addCustomSize()}
-                                    />
-                                    <button
-                                        onClick={addCustomSize}
-                                        disabled={!customSize.trim()}
-                                        className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        Add Size
-                                    </button>
-                                </div>
-
-                                {/* Selected sizes summary */}
-                                {selectedSizes.length > 0 && (
-                                    <div className="mt-4 flex flex-wrap gap-2">
-                                        {selectedSizes.map(size => (
-                                            <span key={size} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-sm shadow-sm font-medium">
-                                                {size}
-                                                <button onClick={() => toggleSize(size)} className="text-gray-400 hover:text-red-500 ml-1">
-                                                    <i className="ri-close-line text-sm"></i>
-                                                </button>
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* STEP 3: Variant Grid */}
-                            {variantCombinations.length > 0 && (
-                                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                                    <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-                                        <div>
-                                            <h4 className="text-sm font-bold text-gray-900 flex items-center">
-                                                <i className="ri-grid-line mr-2 text-lg text-store-primary"></i>
-                                                Step 3: Set Price & Stock ({variantCombinations.length} variant{variantCombinations.length > 1 ? 's' : ''})
-                                            </h4>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => {
-                                                    const val = prompt('Set price for ALL variants:', price?.toString() || '0');
-                                                    if (val !== null) bulkSetField('price', val);
-                                                }}
-                                                className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-                                            >
-                                                Bulk Set Price
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    const val = prompt('Set stock for ALL variants:', '0');
-                                                    if (val !== null) bulkSetField('stock', val);
-                                                }}
-                                                className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-                                            >
-                                                Bulk Set Stock
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    const val = prompt('Set sale price for ALL variants (empty to clear):', '');
-                                                    if (val !== null) bulkSetField('salePrice', val);
-                                                }}
-                                                className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-                                            >
-                                                Bulk Sale Price
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full">
-                                            <thead className="bg-gray-50 border-b border-gray-200">
-                                                <tr>
-                                                    {selectedColors.length > 0 && (
-                                                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Color</th>
-                                                    )}
-                                                    {selectedSizes.length > 0 && (
-                                                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Size</th>
-                                                    )}
-                                                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Price (GH₵)</th>
-                                                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Sale (GH₵)</th>
-                                                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Stock</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {variantCombinations.map((combo) => {
-                                                    const d = variantData[combo.key] || emptyVariantRow();
-                                                    return (
-                                                        <tr key={combo.key} className="border-b border-gray-100 hover:bg-gray-50">
-                                                            {selectedColors.length > 0 && (
-                                                                <td className="py-3 px-4">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span
-                                                                            className="w-5 h-5 rounded-full border border-gray-300 flex-shrink-0"
-                                                                            style={{ backgroundColor: combo.colorHex }}
-                                                                        ></span>
-                                                                        <span className="text-sm font-medium text-gray-900">{combo.color}</span>
-                                                                    </div>
-                                                                </td>
-                                                            )}
-                                                            {selectedSizes.length > 0 && (
-                                                                <td className="py-3 px-4">
-                                                                    <span className="text-sm font-semibold text-gray-900 bg-gray-100 px-2.5 py-1 rounded">
-                                                                        {combo.size}
-                                                                    </span>
-                                                                </td>
-                                                            )}
-                                                            <td className="py-3 px-4">
-                                                                <input
-                                                                    type="number"
-                                                                    value={d.price}
-                                                                    onChange={(e) => updateVariantField(combo.key, 'price', e.target.value)}
-                                                                    className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-store-primary focus:border-store-primary"
-                                                                    step="0.01"
-                                                                    placeholder={price?.toString() || '0'}
-                                                                />
-                                                            </td>
-                                                            <td className="py-3 px-4">
-                                                                <input
-                                                                    type="number"
-                                                                    value={d.salePrice}
-                                                                    onChange={(e) => updateVariantField(combo.key, 'salePrice', e.target.value)}
-                                                                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-store-primary focus:border-store-primary"
-                                                                    step="0.01"
-                                                                    placeholder="—"
-                                                                />
-                                                            </td>
-                                                            <td className="py-3 px-4">
-                                                                <input
-                                                                    type="number"
-                                                                    value={d.stock}
-                                                                    onChange={(e) => updateVariantField(combo.key, 'stock', e.target.value)}
-                                                                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-store-primary focus:border-store-primary"
-                                                                    placeholder="0"
-                                                                />
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    <div className="p-3 bg-store-surface border-t border-gray-100">
-                                        <p className="text-xs text-store-ink flex items-center">
-                                            <i className="ri-information-line mr-1.5"></i>
-                                            Total stock across all variants: <strong className="ml-1">{variants.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0)}</strong>
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {variantCombinations.length === 0 && (
-                                <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                                    <i className="ri-palette-line text-4xl text-gray-300 mb-2 block"></i>
-                                    <p className="font-medium">No variants configured</p>
-                                    <p className="text-sm mt-1">Select colors and/or sizes above to create variant combinations.</p>
-                                    <p className="text-xs mt-2 text-gray-400">You can add just colors, just sizes, or both for a full grid.</p>
-                                </div>
-                            )}
-                        </div>
+                        <ProductVariantsEditor
+                            productPrice={String(price || '')}
+                            productSku={sku}
+                            lowStockThreshold={parseInt(String(lowStockThreshold), 10) || 5}
+                            selectedColors={selectedColors}
+                            selectedSizes={selectedSizes}
+                            variantData={variantData}
+                            onColorsChange={setSelectedColors}
+                            onSizesChange={setSelectedSizes}
+                            onVariantDataChange={setVariantData}
+                        />
                     )}
 
                     {activeTab === 'images' && (
@@ -1144,116 +769,38 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     )}
 
                     {activeTab === 'seo' && (
-                        <div className="space-y-6 max-w-3xl">
-                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-900 mb-1">Search Engine Optimization</h3>
-                                    <p className="text-gray-600">These fields update from the product name until you edit them.</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => applyGeneratedSeo(true)}
-                                    className="px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 whitespace-nowrap"
-                                >
-                                    <i className="ri-refresh-line mr-1"></i>
-                                    Rebuild from name
-                                </button>
-                            </div>
-
-                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                                <p className="text-xs text-gray-500 mb-1">Google preview</p>
-                                <p className="text-[#1a0dab] text-lg leading-snug">{seoTitle || 'Page title'}</p>
-                                <p className="text-sm text-green-800 font-mono truncate">
-                                    upscalevintage.shop/product/{urlSlug || '…'}
-                                </p>
-                                <p className="text-sm text-gray-600 mt-1">{metaDescription || 'Meta description'}</p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Page title
-                                </label>
-                                <input
-                                    type="text"
-                                    value={seoTitle}
-                                    onChange={(e) => {
-                                        setSeoTitleManual(true);
-                                        setSeoTitle(e.target.value);
-                                    }}
-                                    maxLength={70}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary"
-                                    placeholder="Product name | Upscale Vintage"
-                                />
-                                <p className={`text-sm mt-2 ${seoTitle.length > 60 ? 'text-amber-700' : 'text-gray-500'}`}>
-                                    {seoTitle.length}/60 characters recommended
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Meta description
-                                </label>
-                                <textarea
-                                    rows={3}
-                                    maxLength={200}
-                                    value={metaDescription}
-                                    onChange={(e) => {
-                                        setSeoDescManual(true);
-                                        setMetaDescription(e.target.value);
-                                    }}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary resize-none"
-                                    placeholder="Shop this product at Upscale Vintage. Fast delivery across Ghana."
-                                />
-                                <p className={`text-sm mt-2 ${metaDescription.length > 160 ? 'text-amber-700' : 'text-gray-500'}`}>
-                                    {metaDescription.length}/160 characters recommended
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    URL slug
-                                </label>
-                                <div className="flex items-center min-w-0">
-                                    <span className="text-gray-600 bg-gray-100 px-4 py-3 border-2 border-r-0 border-gray-300 rounded-l-lg whitespace-nowrap text-sm">
-                                        /product/
-                                    </span>
-                                    <input
-                                        type="text"
-                                        value={urlSlug}
-                                        onChange={(e) => {
-                                            setSlugManual(true);
-                                            setUrlSlug(slugifyProduct(e.target.value));
-                                        }}
-                                        autoCapitalize="none"
-                                        autoCorrect="off"
-                                        spellCheck={false}
-                                        className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary font-mono"
-                                        placeholder="product-slug"
-                                    />
-                                </div>
-                                <p className="text-sm text-gray-500 mt-2">
-                                    Lowercase letters, numbers, and dashes only.
-                                    {urlSlug.length > 0 && urlSlug.length < 3 ? ' Use at least 3 characters when you can.' : ''}
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                    Keywords
-                                </label>
-                                <input
-                                    type="text"
-                                    value={keywords}
-                                    onChange={(e) => {
-                                        setKeywordsManual(true);
-                                        setKeywords(e.target.value);
-                                    }}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-store-primary focus:border-store-primary"
-                                    placeholder="keyword1, keyword2"
-                                />
-                                <p className="text-sm text-gray-500 mt-2">Separate keywords with commas</p>
-                            </div>
-                        </div>
+                        <ProductSeoEditor
+                            productName={productName}
+                            description={description}
+                            categoryName={categories.find((c) => c.id === categoryId)?.name || ''}
+                            siteName={process.env.NEXT_PUBLIC_SITE_NAME || 'Upscale Vintage'}
+                            productId={initialData?.id}
+                            primaryImage={images[0]?.url}
+                            slug={urlSlug}
+                            seoTitle={seoTitle}
+                            seoDescription={metaDescription}
+                            keywords={keywords}
+                            focusKeyword={focusKeyword}
+                            slugManual={slugManual}
+                            onSlugChange={(value, manual) => {
+                                setSlugManual(manual);
+                                setUrlSlug(value);
+                            }}
+                            onTitleChange={(value, manual) => {
+                                setSeoTitleManual(manual);
+                                setSeoTitle(value);
+                            }}
+                            onDescriptionChange={(value, manual) => {
+                                setSeoDescManual(manual);
+                                setMetaDescription(value);
+                            }}
+                            onKeywordsChange={(value, manual) => {
+                                setKeywordsManual(manual);
+                                setKeywords(value);
+                            }}
+                            onFocusChange={setFocusKeyword}
+                            onRebuild={() => applyGeneratedSeo(true)}
+                        />
                     )}
                 </div>
             </div>
