@@ -68,7 +68,6 @@ export default function CheckoutPage() {
 
   const [deliveryMethod, setDeliveryMethod] = useState('pickup');
   const [paymentMethod, setPaymentMethod] = useState('moolre');
-  const [paymentOption, setPaymentOption] = useState<'full' | 'half'>('full');
   const [errors, setErrors] = useState<any>({});
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
 
@@ -122,9 +121,6 @@ export default function CheckoutPage() {
   const tax = 0; // No Tax
   const couponDiscount = appliedCoupon?.discount || 0;
   const total = Math.max(0, subtotal + shippingCost + tax - couponDiscount);
-  const dueNow =
-    paymentOption === 'half' ? Math.round((total / 2) * 100) / 100 : total;
-  const balanceDue = Math.round((total - dueNow) * 100) / 100;
 
   const validateShipping = () => {
     const newErrors: any = {};
@@ -193,7 +189,7 @@ export default function CheckoutPage() {
           shippingData,
           deliveryMethod,
           paymentMethod,
-          paymentOption,
+          paymentOption: 'full',
           cart: cartPayload,
           shippingCost,
           tax,
@@ -626,63 +622,19 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">Payment Amount</h2>
-                  <p className="text-sm text-gray-600 mb-6">
-                    Choose full payment now, or pay half now and the rest before pickup or delivery.
+                  <h2 className="text-xl font-bold text-gray-900 mb-2 font-sans tracking-normal">Payment</h2>
+                  <p className="text-sm text-gray-600 mb-6 font-sans tracking-normal [word-spacing:0.06em]">
+                    Pay the full order now with Mobile Money.
                   </p>
-                  <div className="space-y-4">
-                    <label
-                      className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                        paymentOption === 'full'
-                          ? 'border-store-navy bg-store-surface'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-4">
-                        <input
-                          type="radio"
-                          name="paymentOption"
-                          value="full"
-                          checked={paymentOption === 'full'}
-                          onChange={() => setPaymentOption('full')}
-                          className="w-5 h-5 text-store-ink"
-                        />
-                        <div>
-                          <p className="font-semibold text-gray-900">Full Payment</p>
-                          <p className="text-sm text-gray-600">Pay the entire order now</p>
-                        </div>
-                      </div>
-                      <p className="font-bold text-store-ink">GH₵ {total.toFixed(2)}</p>
-                    </label>
-
-                    <label
-                      className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                        paymentOption === 'half'
-                          ? 'border-store-navy bg-store-surface'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-4">
-                        <input
-                          type="radio"
-                          name="paymentOption"
-                          value="half"
-                          checked={paymentOption === 'half'}
-                          onChange={() => setPaymentOption('half')}
-                          className="w-5 h-5 text-store-ink"
-                        />
-                        <div>
-                          <p className="font-semibold text-gray-900">Half Payment</p>
-                          <p className="text-sm text-gray-600">
-                            Pay 50% now — remaining GH₵ {balanceDue.toFixed(2)} before pickup/delivery
-                          </p>
-                        </div>
-                      </div>
-                      <p className="font-bold text-store-ink">GH₵ {dueNow.toFixed(2)}</p>
-                    </label>
+                  <div className="flex items-center justify-between p-4 border-2 border-store-navy bg-store-surface rounded-lg mb-6">
+                    <div>
+                      <p className="font-semibold text-gray-900 font-sans tracking-normal">Amount due</p>
+                      <p className="text-sm text-gray-600">Entire order, paid now</p>
+                    </div>
+                    <p className="font-bold text-store-ink">GH₵ {total.toFixed(2)}</p>
                   </div>
 
-                  <div className="flex flex-col-reverse md:flex-row gap-4 mt-6">
+                  <div className="flex flex-col-reverse md:flex-row gap-4">
                     <button
                       onClick={() => setCurrentStep(1)}
                       disabled={isLoading}
@@ -704,7 +656,7 @@ export default function CheckoutPage() {
                           Processing...
                         </>
                       ) : (
-                        `Pay GH₵ ${dueNow.toFixed(2)} with Mobile Money`
+                        `Pay GH₵ ${total.toFixed(2)} with Mobile Money`
                       )}
                     </button>
                   </div>
@@ -724,9 +676,6 @@ export default function CheckoutPage() {
               shipping={shippingCost}
               tax={tax}
               total={total}
-              dueNow={dueNow}
-              balanceDue={paymentOption === 'half' ? balanceDue : 0}
-              paymentOption={paymentOption}
               discount={couponDiscount}
               couponCode={appliedCoupon?.code}
             />

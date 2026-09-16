@@ -50,8 +50,8 @@ export const POST = route(async (request) => {
         return fail('Invalid checkout payload.', 400, 'validation_error');
     }
 
-    if (paymentOption !== 'full' && paymentOption !== 'half') {
-        return fail('Invalid payment option.', 400, 'validation_error');
+    if (paymentOption && paymentOption !== 'full') {
+        return fail('Only full payment is available.', 400, 'validation_error');
     }
 
     const userId = await getUserIdFromRequest(request);
@@ -63,7 +63,7 @@ export const POST = route(async (request) => {
         shippingData: shippingData as Record<string, string>,
         deliveryMethod: String(deliveryMethod),
         paymentMethod: String(paymentMethod),
-        paymentOption: String(paymentOption),
+        paymentOption: 'full',
         cart: cart as Parameters<typeof createOrderFromCheckout>[0]['cart'],
         shippingCost: Number(shippingCost) || 0,
         tax: Number(tax) || 0,
