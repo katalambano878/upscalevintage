@@ -150,6 +150,11 @@ export default function AdminLayout({
       path: '/admin/pos'
     },
     {
+      title: 'End of day',
+      icon: 'ri-moon-clear-line',
+      path: '/admin/end-of-day'
+    },
+    {
       title: 'Products',
       icon: 'ri-box-3-line',
       path: '/admin/products'

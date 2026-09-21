@@ -30,6 +30,10 @@ export default function AdminSalesPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
+  const [percentOff, setPercentOff] = useState('10');
+  const [applying, setApplying] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -70,6 +74,22 @@ export default function AdminSalesPage() {
     () => products.filter((p) => p.status === 'active' && !(asNumber(p.sale_price) > 0)),
     [products]
   );
+
+  const catalog = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return products.filter((product) => {
+      if (product.status === 'archived') return false;
+      if (!term) return true;
+      const category = product.categories?.name || '';
+      return (
+        product.name.toLowerCase().includes(term) ||
+        (product.sku || '').toLowerCase().includes(term) ||
+        category.toLowerCase().includes(term)
+      );
+    });
+  }, [products, search]);
+
+  const allVisibleSelected = catalog.length > 0 && catalog.every((product) => selected.has(product.id));
 
   const avgOff = useMemo(() => {
     if (!eligible.length) return 0;
@@ -118,6 +138,52 @@ export default function AdminSalesPage() {
     ends_at: endsAt ? new Date(endsAt).toISOString() : null,
     headline: headline.trim(),
   });
+
+  const toggleProduct = (id: string) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleVisible = () => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) catalog.forEach((product) => next.delete(product.id));
+      else catalog.forEach((product) => next.add(product.id));
+      return next;
+    });
+  };
+
+  const updateSelectedPrices = async (action: 'apply' | 'clear') => {
+    if (!isAdmin) return;
+    if (selected.size === 0) {
+      setError('Select at least one product.');
+      return;
+    }
+
+    setApplying(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await apiData('/api/admin/sales/products', {
+        method: 'POST',
+        json: {
+          action,
+          product_ids: [...selected],
+          percent: action === 'apply' ? Number(percentOff) : undefined,
+        },
+      });
+      setSaved(true);
+      await load();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Could not update products');
+    } finally {
+      setApplying(false);
+    }
+  };
 
   const handleToggle = async (next: boolean) => {
     setEnabled(next);
@@ -252,23 +318,71 @@ export default function AdminSalesPage() {
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 font-sans tracking-normal">Eligible products</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Products with a sale price lower than the regular price. These are the ones customers see
-              on sale when sales mode is on.
-            </p>
+        <div className="p-6 border-b border-gray-200 space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 font-sans tracking-normal">Products for the sale</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Tick the pieces to include, or select all. The discount is saved as each product&apos;s sale price
+                and shows on the storefront while sales mode is on.
+              </p>
+            </div>
+            <p className="text-sm font-semibold text-gray-900">{selected.size} selected</p>
           </div>
-          <Link href="/admin/products" className="text-sm font-semibold text-store-ink hover:underline">
-            Manage products
-          </Link>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <label className="block flex-1">
+              <span className="mb-2 block text-sm font-semibold text-gray-900">Search</span>
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Name, SKU, or category"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg"
+              />
+            </label>
+            <label className="block w-full lg:w-36">
+              <span className="mb-2 block text-sm font-semibold text-gray-900">Percent off</span>
+              <input
+                type="number"
+                min="1"
+                max="99"
+                value={percentOff}
+                onChange={(e) => setPercentOff(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={!isAdmin || applying || selected.size === 0}
+              onClick={() => updateSelectedPrices('apply')}
+              className="px-5 py-3 bg-store-navy text-white rounded-lg font-semibold disabled:opacity-60"
+            >
+              {applying ? 'Saving…' : 'Apply to selected'}
+            </button>
+            <button
+              type="button"
+              disabled={!isAdmin || applying || selected.size === 0}
+              onClick={() => updateSelectedPrices('clear')}
+              className="px-5 py-3 border border-gray-300 rounded-lg font-semibold text-gray-800 disabled:opacity-60"
+            >
+              Remove from sale
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left py-3 px-6 text-sm font-semibold text-gray-700">Product</th>
+                <th className="py-3 pl-6 pr-2 text-left">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleVisible}
+                    aria-label="Select all products"
+                    className="h-4 w-4"
+                  />
+                </th>
+                <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Product</th>
                 <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Regular</th>
                 <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Sale</th>
                 <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Savings</th>
@@ -276,31 +390,43 @@ export default function AdminSalesPage() {
               </tr>
             </thead>
             <tbody>
-              {eligible.length === 0 ? (
+              {catalog.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-gray-500">
-                    No products have a sale price yet. Add a sale price on a product to make it eligible.
+                  <td colSpan={6} className="p-8 text-center text-gray-500">
+                    No products match this search.
                   </td>
                 </tr>
               ) : (
-                eligible.map((p) => {
+                catalog.map((p) => {
                   const price = asNumber(p.price);
                   const sale = asNumber(p.sale_price);
-                  const save = price - sale;
+                  const onSale = sale > 0 && sale < price;
+                  const save = onSale ? price - sale : 0;
                   return (
                     <tr key={p.id} className="border-b border-gray-100">
-                      <td className="py-3 px-6">
+                      <td className="py-3 pl-6 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(p.id)}
+                          onChange={() => toggleProduct(p.id)}
+                          aria-label={`Include ${p.name}`}
+                          className="h-4 w-4"
+                        />
+                      </td>
+                      <td className="py-3 px-4">
                         <Link href={`/admin/products/${p.id}`} className="font-medium text-gray-900 hover:underline">
                           {p.name}
                         </Link>
                         <p className="text-xs text-gray-500">{p.categories?.name || p.sku || p.slug}</p>
                       </td>
                       <td className="py-3 px-4 text-gray-700">GH₵{money(price)}</td>
-                      <td className="py-3 px-4 font-semibold text-gray-900">GH₵{money(sale)}</td>
-                      <td className="py-3 px-4 text-store-ink">
-                        GH₵{money(save)} ({price > 0 ? Math.round((save / price) * 100) : 0}%)
+                      <td className="py-3 px-4 font-semibold text-gray-900">
+                        {onSale ? `GH₵${money(sale)}` : '—'}
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-600">{p.status}</td>
+                      <td className="py-3 px-4 text-store-ink">
+                        {onSale ? `GH₵${money(save)} (${price > 0 ? Math.round((save / price) * 100) : 0}%)` : '—'}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{onSale ? 'On sale' : p.status}</td>
                     </tr>
                   );
                 })
