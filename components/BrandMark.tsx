@@ -7,7 +7,7 @@ interface BrandMarkProps {
 }
 
 export default function BrandMark({ className = '', tone = 'light' }: BrandMarkProps) {
-  const src = tone === 'dark' ? '/logo-on-dark.png' : '/logo.png';
+  const src = tone === 'dark' ? '/brand-mark-on-dark.png' : '/brand-mark.png';
 
   return (
     <img

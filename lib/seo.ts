@@ -58,7 +58,7 @@ export const SEO_ASSETS = {
   ogImage: '/og-image.png',
   ogImageSquare: '/og-image-square.png',
   twitterCard: '/twitter-card.png',
-  logo: '/logo.png',
+  logo: '/brand-mark.png',
   faviconDir: '/favicon',
   faviconIco: '/favicon/favicon.ico',
   favicon16: '/favicon/favicon-16x16.png',

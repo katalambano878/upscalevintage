@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
-import Logo from '@/components/Logo';
+import BrandMark from '@/components/BrandMark';
 import { BRAND_NAME } from '@/lib/brand';
 
 export default function AdminLoginPage() {
@@ -48,7 +48,7 @@ export default function AdminLoginPage() {
         <div className="text-center mb-8">
           <Link href="/" className="inline-block">
             <div className="flex justify-center">
-              <Logo className="h-16 w-auto max-w-[240px] object-contain mx-auto" priority />
+              <BrandMark className="mx-auto h-24 w-auto max-w-[240px]" />
             </div>
           </Link>
           <p className="font-display text-brand-mauve text-sm tracking-wide mt-3">{BRAND_NAME}</p>

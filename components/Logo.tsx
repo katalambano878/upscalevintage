@@ -22,7 +22,8 @@ export default function Logo({
       height={height}
       className={className}
       priority={priority}
-      style={{ width: 'auto', height: '100%', maxHeight: '3rem' }}
+      unoptimized
+      style={{ width: 'auto', height: 'auto', maxHeight: '100%' }}
     />
   );
 }

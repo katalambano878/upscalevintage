@@ -16,7 +16,7 @@ export const BRAND_INTRO_SECONDARY =
 export const BRAND_INTRO_TERTIARY =
   'With a focus on quality, trusted sourcing and exceptional finds, we make it easier to discover products you’ll love, all in one place.';
 export const SITE_URL_DEFAULT = 'https://upscalevintage.shop';
-export const LOGO_PATH = '/logo.png';
+export const LOGO_PATH = '/brand-mark.png';
 export const OG_IMAGE_PATH = '/og-image.png';
 
 export const CONTACT_ADDRESS = 'Hatso Agbogba Salasi Junction, Accra, Ghana';

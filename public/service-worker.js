@@ -1,5 +1,5 @@
 // UPSCALE VINTAGE - Service Worker
-const CACHE_VERSION = 'app-v1.2-kill-local';
+const CACHE_VERSION = 'app-v1.3-brand-mark';
 
 // Local dev: drop this worker immediately so leftover caches cannot hide UI updates.
 if (self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1') {
@@ -35,7 +35,7 @@ const STATIC_ASSETS = [
   '/account',
   '/categories',
   '/offline',
-  '/logo.png',
+  '/brand-mark.png',
 ];
 
 // Cache size limits
@@ -249,8 +249,8 @@ self.addEventListener('push', (event) => {
   const data = event.data.json();
   const options = {
     body: data.body || 'New update from UPSCALE VINTAGE',
-    icon: '/logo.png',
-    badge: '/logo.png',
+    icon: '/brand-mark.png',
+    badge: '/brand-mark.png',
     vibrate: [100, 50, 100],
     data: {
       url: data.url || '/',
