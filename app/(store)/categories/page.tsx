@@ -47,7 +47,7 @@ export default async function CategoriesPage() {
       slug: category.slug,
       name: category.name,
       description: category.description ?? null,
-      image: `/categories/${category.slug}.png`,
+      image: category.image_url?.trim() || `/categories/${category.slug}.png`,
     }));
 
   return (
