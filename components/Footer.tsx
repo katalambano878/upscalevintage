@@ -53,7 +53,7 @@ export default function Footer() {
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
             <Link href="/" className="shrink-0" aria-label={`${siteName} homepage`}>
-              <BrandMark compact className="text-white" />
+              <BrandMark tone="dark" className="h-16 sm:h-[4.5rem]" />
             </Link>
           </div>
 

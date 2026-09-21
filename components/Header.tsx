@@ -10,6 +10,7 @@ import { useCMS } from '@/context/CMSContext';
 import AnnouncementBar from './AnnouncementBar';
 import HeaderActions from './HeaderActions';
 import { NAV_LINKS, NAV_LINKS_OPTIONAL } from '@/lib/brand';
+import BrandMark from './BrandMark';
 
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -61,10 +62,8 @@ export default function Header() {
             >
               <i className="ri-menu-line text-2xl"></i>
             </button>
-            <Link href="/" className="flex items-center gap-2 select-none" aria-label={`Go to ${siteName} homepage`}>
-              <span className="text-[1.2rem] font-semibold tracking-tight text-brand-espresso sm:text-[1.35rem]">Upscale</span>
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-champagne" aria-hidden />
-              <span className="text-[1.2rem] font-semibold tracking-tight text-brand-espresso sm:text-[1.35rem]">Vintage</span>
+            <Link href="/" className="flex min-w-0 items-center" aria-label={`Go to ${siteName} homepage`}>
+              <BrandMark className="h-11 sm:h-14" />
             </Link>
           </div>
 
@@ -133,10 +132,8 @@ export default function Header() {
           />
           <div className="absolute bottom-0 left-0 top-0 flex w-[85%] max-w-sm flex-col bg-white shadow-lg">
             <div className="flex items-center justify-between border-b border-black/[0.06] p-5">
-              <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2">
-                <span className="text-xl font-semibold">Upscale</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-brand-champagne" aria-hidden />
-                <span className="text-xl font-semibold">Vintage</span>
+              <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center" aria-label={`Go to ${siteName} homepage`}>
+                <BrandMark className="h-12" />
               </Link>
               <button
                 onClick={() => setIsMobileMenuOpen(false)}

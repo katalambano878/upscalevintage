@@ -2,13 +2,18 @@ import { APP_TITLE } from '@/lib/brand';
 
 interface BrandMarkProps {
   className?: string;
-  compact?: boolean;
+  /** `dark` is the white monogram for black backgrounds. */
+  tone?: 'light' | 'dark';
 }
 
-export default function BrandMark({ className = '' }: BrandMarkProps) {
+export default function BrandMark({ className = '', tone = 'light' }: BrandMarkProps) {
+  const src = tone === 'dark' ? '/logo-on-dark.png' : '/logo.png';
+
   return (
-    <span className={`block truncate text-[1.35rem] font-semibold tracking-tight ${className || 'text-brand-espresso'}`}>
-      {APP_TITLE}
-    </span>
+    <img
+      src={src}
+      alt={APP_TITLE}
+      className={`h-12 w-auto object-contain ${className}`}
+    />
   );
 }
