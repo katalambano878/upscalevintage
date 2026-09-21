@@ -74,10 +74,10 @@ export const NAV_LINKS_OPTIONAL = [
 export const FOOTER_TAGLINE = 'Good things. A brighter you.';
 
 /** Homepage hero — editorial lifestyle (bust cache when images change) */
-export const HERO_IMAGE_VERSION = '20260921g';
+export const HERO_IMAGE_VERSION = '20260921h';
 export const HERO_IMAGES = [
-  '/hero/hero-home-1.png',
-  '/hero/hero-home-2.png',
+  '/hero/hero-home-1.jpg',
+  '/hero/hero-home-2.jpg',
   '/hero/hero-home-3.png',
 ] as const;
 
