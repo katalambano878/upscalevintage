@@ -27,7 +27,26 @@ type StoreCategory = {
   slug: string;
   description: string | null;
   image_url: string | null;
+  metadata?: { featured?: boolean } | string | null;
 };
+
+function isFeaturedCategory(category: StoreCategory) {
+  const raw = category.metadata;
+  if (!raw) return false;
+
+  let metadata: { featured?: unknown } = {};
+  if (typeof raw === 'string') {
+    try {
+      metadata = JSON.parse(raw) as { featured?: unknown };
+    } catch {
+      return false;
+    }
+  } else {
+    metadata = raw;
+  }
+
+  return metadata.featured === true;
+}
 
 const CATEGORY_CARD_CLASS =
   'flex-shrink-0 w-[72vw] max-w-[300px] sm:w-[280px] md:w-[300px] lg:w-[320px]';
@@ -56,10 +75,7 @@ export default function HomeClient() {
       if (!Array.isArray(categoriesResult)) {
         console.error('Error fetching categories');
       } else {
-        const featuredCats = (categoriesResult as StoreCategory[]).filter(
-          (c) => (c as StoreCategory & { metadata?: { featured?: boolean } }).metadata?.featured !== false
-        );
-        setCategories(featuredCats.length ? featuredCats : (categoriesResult as StoreCategory[]));
+        setCategories((categoriesResult as StoreCategory[]).filter(isFeaturedCategory));
       }
       setCategoriesLoading(false);
     }
@@ -147,11 +163,7 @@ export default function HomeClient() {
                 </HorizontalScroll>
               </div>
             </AnimatedSection>
-          ) : (
-            <p className="py-8 text-center font-light text-brand-mauve">
-              Add categories in the admin dashboard to show them here.
-            </p>
-          )}
+          ) : null}
         </div>
       </section>
 
