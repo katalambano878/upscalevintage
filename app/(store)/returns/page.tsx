@@ -76,7 +76,7 @@ export default function ReturnsPage() {
       <PageHero
         title="Returns & Refunds"
         subtitle="Read our refund policy below, then start a return or exchange request with your order details."
-        backgroundImage="/hero/lifestyle-hero-2.png"
+        backgroundImage="/hero/hero-contact.png"
       />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-16 space-y-14">

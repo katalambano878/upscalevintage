@@ -4,8 +4,7 @@
 export const APP_TITLE = 'Upscale Vintage';
 export const BRAND_NAME = 'Upscale Vintage';
 export const SHORT_NAME = 'Upscale';
-export const TAGLINE =
-  'Your trending lifestyle destination and import plug: fashion, home appliances, accessories, and curated arrivals in one place.';
+export const TAGLINE = 'Good things. A brighter you.';
 
 /** Default on-page body copy tone (use with class `brand-body`) */
 export const BRAND_INTRO =
@@ -40,47 +39,59 @@ export const CURRENCY = 'GHS';
 export const CURRENCY_SYMBOL = 'GH₵';
 export const SUPABASE_PROJECT_REF = 'YOUR_PROJECT_ID';
 
-/** Typography: Cormorant Garamond (display) + Manrope (UI/body) */
+/** Typography: Plus Jakarta Sans (UI + display) + Caveat (hand notes) */
 export const FONTS = {
-  display: 'Cormorant Garamond',
-  sans: 'Manrope',
+  display: 'Plus Jakarta Sans',
+  sans: 'Plus Jakarta Sans',
+  script: 'Caveat',
 } as const;
 
-/** Brand palette — warm, inclusive, social-commerce friendly */
+/** Brand palette — black, white, and a lady's gold */
 export const COLORS = {
-  primary: '#8A6A58',
-  secondary: '#EDE3D7',
-  accent: '#C8A46A',
-  highlight: '#A6A089',
-  background: '#FAF7F2',
-  text: '#4A403B',
+  primary: '#111111',
+  secondary: '#FFFFFF',
+  accent: '#C5A46A',
+  highlight: '#6B6B6B',
+  background: '#FFFFFF',
+  text: '#111111',
 } as const;
 
 export const LOGO_CLASS_HEADER = 'h-10 md:h-12 w-auto object-contain';
 
 export const NAV_LINKS = [
   { label: 'Home', href: '/' },
+  { label: 'Shop', href: '/shop' },
   { label: 'Categories', href: '/categories' },
-  { label: 'Products', href: '/shop' },
-  { label: 'About Us', href: '/about' },
+  { label: 'Blog', href: '/blog' },
   { label: 'Contact Us', href: '/contact' },
 ] as const;
 
 export const NAV_LINKS_OPTIONAL = [
-  { label: 'New Arrivals', href: '/shop?sort=newest' },
-  { label: 'Featured', href: '/shop?featured=true' },
+  { label: 'About Us', href: '/about' },
+  { label: 'Contact Us', href: '/contact' },
 ] as const;
 
-export const FOOTER_TAGLINE =
-  'Trending lifestyle and import-ready picks: fashion, home appliances, accessories, and more.';
+export const FOOTER_TAGLINE = 'Good things. A brighter you.';
 
-/** Homepage hero slider — lifestyle imports (bust cache when images change) */
-export const HERO_IMAGE_VERSION = '20260522';
+/** Homepage hero — editorial lifestyle (bust cache when images change) */
+export const HERO_IMAGE_VERSION = '20260921g';
 export const HERO_IMAGES = [
-  '/hero/lifestyle-hero-1.png',
-  '/hero/lifestyle-hero-2.png',
-  '/hero/lifestyle-hero-3.png',
+  '/hero/hero-home-1.png',
+  '/hero/hero-home-2.png',
+  '/hero/hero-home-3.png',
 ] as const;
+
+/** Generated page heroes — no people, black/white/gold boutique aesthetic */
+export const PAGE_HERO_IMAGES = {
+  categories: '/hero/hero-categories.png',
+  shop: '/hero/hero-shop.png',
+  blog: '/hero/hero-blog.png',
+  about: '/hero/hero-about.png',
+  contact: '/hero/hero-contact.png',
+  cart: '/hero/hero-shop.png',
+  wishlist: '/hero/hero-categories.png',
+  returns: '/hero/hero-contact.png',
+} as const;
 
 export const HOME_CATEGORIES = [
   { id: 'fashion', name: 'Fashion Picks', subtitle: 'Trending everyday style', slug: 'fashion', tint: 'from-[#A6A089]/80 via-[#EDE3D7]/60 to-[#FAF7F2]' },

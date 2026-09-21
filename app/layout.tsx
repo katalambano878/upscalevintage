@@ -16,7 +16,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
-  themeColor: '#8A6A58',
+  themeColor: '#111111',
 };
 
 export const metadata = buildRootMetadata();
@@ -34,12 +34,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta name="theme-color" content="#8A6A58" />
+        <meta name="theme-color" content="#111111" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Upscale" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="msapplication-TileColor" content="#8A6A58" />
+        <meta name="msapplication-TileColor" content="#111111" />
         <meta name="msapplication-TileImage" content={SEO_ASSETS.icon192} />
         <meta name="msapplication-config" content="/favicon/browserconfig.xml" />
         <meta name="msapplication-tap-highlight" content="no" />
@@ -50,11 +50,31 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="180x180" href={SEO_ASSETS.appleTouchIcon} />
         <link rel="manifest" href="/favicon/site.webmanifest" />
 
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function () {
+                var host = location.hostname;
+                if (host !== 'localhost' && host !== '127.0.0.1') return;
+                if ('serviceWorker' in navigator) {
+                  navigator.serviceWorker.getRegistrations().then(function (regs) {
+                    regs.forEach(function (reg) { reg.unregister(); });
+                  });
+                }
+                if (window.caches) {
+                  caches.keys().then(function (keys) {
+                    keys.forEach(function (key) { caches.delete(key); });
+                  });
+                }
+              })();
+            `,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
-          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Manrope:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&display=swap"
           rel="stylesheet"
         />
 
@@ -96,7 +116,7 @@ export default function RootLayout({
       <body className="antialiased font-sans overflow-x-hidden pwa-body">
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[10000] focus:px-6 focus:py-3 focus:bg-brand-espresso focus:text-brand-cream focus:rounded-lg focus:font-semibold focus:shadow-lg"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[10000] focus:px-6 focus:py-3 focus:bg-black focus:text-white focus:rounded-lg focus:font-semibold"
         >
           Skip to main content
         </a>

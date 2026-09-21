@@ -68,6 +68,24 @@ export default function PWAInstaller() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
     window.addEventListener('appinstalled', handleInstalled);
 
+    // Localhost is shared across every store on this machine. A leftover SW from
+    // another app on :3000 will serve stale webpack chunks (classic
+    // "Cannot read properties of undefined (reading 'call')" + old supabase.ts).
+    if (process.env.NODE_ENV === 'development') {
+      if ('serviceWorker' in navigator) {
+        void navigator.serviceWorker.getRegistrations().then((regs) =>
+          Promise.all(regs.map((reg) => reg.unregister()))
+        );
+        if (typeof caches !== 'undefined') {
+          void caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))));
+        }
+      }
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+        window.removeEventListener('appinstalled', handleInstalled);
+      };
+    }
+
     // Register service worker with update detection
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker

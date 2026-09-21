@@ -1,123 +1,100 @@
 import Link from 'next/link';
-import PageHero from '@/components/PageHero';
+import CategoryGrid, { type CategoryCardData } from '@/components/CategoryGrid';
 import { listCategories } from '@/lib/data/products';
+import { HERO_IMAGE_VERSION, PAGE_HERO_IMAGES } from '@/lib/brand';
 
 /** Runtime-only: build containers often lack DATABASE_URL. */
 export const dynamic = 'force-dynamic';
 
+const COLLECTION_ORDER = [
+  'fashion',
+  'accessories',
+  'beauty',
+  'lifestyle',
+  'imported',
+  'home-appliances',
+  'luxury-cars',
+] as const;
+
+const HIDDEN_SLUGS = new Set(['new', 'new-category']);
+
+type CategoryRow = {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  image_url?: string | null;
+};
+
 export default async function CategoriesPage() {
-  let categoriesData: Array<{
-    id: string;
-    slug: string;
-    name: string;
-    description?: string | null;
-    image_url?: string | null;
-  }> = [];
+  let rows: CategoryRow[] = [];
 
   try {
-    categoriesData = (await listCategories(true)) as typeof categoriesData;
+    rows = (await listCategories(true)) as CategoryRow[];
   } catch (err) {
     console.error('[categories] Failed to load categories:', err);
   }
 
-  const palette = [
-    { color: 'from-store-navy-light to-store-navy', icon: 'ri-store-2-line' },
-    { color: 'from-store-navy-light to-store-navy', icon: 'ri-shopping-bag-3-line' },
-    { color: 'from-store-muted to-store-navy', icon: 'ri-t-shirt-line' },
-    { color: 'from-store-primary to-store-navy-light', icon: 'ri-home-smile-line' },
-    { color: 'from-store-muted to-store-navy', icon: 'ri-heart-line' },
-    { color: 'from-store-primary to-store-navy', icon: 'ri-star-smile-line' },
-  ];
-
-  const categories = categoriesData?.map((c, i) => {
-    const style = palette[i % palette.length];
-    return {
-      ...c,
-      image: c.image_url || `/api/uploads/categories/${c.slug}.png`,
-      color: style.color,
-      icon: style.icon,
-      productCount: 'Browse',
-    };
-  }) || [];
+  const categories: CategoryCardData[] = rows
+    .filter((category) => !HIDDEN_SLUGS.has(category.slug))
+    .sort((a, b) => {
+      const aIndex = COLLECTION_ORDER.indexOf(a.slug as (typeof COLLECTION_ORDER)[number]);
+      const bIndex = COLLECTION_ORDER.indexOf(b.slug as (typeof COLLECTION_ORDER)[number]);
+      return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
+    })
+    .map((category) => ({
+      id: category.id,
+      slug: category.slug,
+      name: category.name,
+      description: category.description ?? null,
+      image: `/categories/${category.slug}.png`,
+    }));
 
   return (
-    <div className="min-h-screen bg-white">
-      <PageHero
-        title="Shop by Category"
-        subtitle="Graphic tees, plain basics, polos & performance shirts — shop by category."
-        backgroundImage="/hero/lifestyle-hero-2.png"
-      />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        {categories.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {categories.map((category) => (
-              <Link
-                key={category.id}
-                href={`/shop?category=${category.slug}`}
-                className="group bg-white border border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl transition-all cursor-pointer"
-              >
-                <div className="relative h-48 overflow-hidden">
-                  <img
-                    src={category.image}
-                    alt={category.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
-                  <div className={`absolute inset-0 bg-gradient-to-t ${category.color} opacity-0 group-hover:opacity-20 transition-opacity`}></div>
-                </div>
-                <div className="p-6">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className={`w-12 h-12 bg-gradient-to-br ${category.color} rounded-full flex items-center justify-center`}>
-                      <i className={`${category.icon} text-2xl text-white`}></i>
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-900">{category.name}</h3>
-                      <p className="text-sm text-gray-500">Collection</p>
-                    </div>
-                  </div>
-                  <p className="text-gray-600 leading-relaxed text-sm mb-4 line-clamp-2">
-                    {category.description || 'Explore our exclusive collection in this category.'}
-                  </p>
-                  <div className="flex items-center text-store-ink font-medium text-sm group-hover:gap-2 transition-all">
-                    <span>Browse Collection</span>
-                    <i className="ri-arrow-right-line ml-2"></i>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-20 bg-gray-50 rounded-xl">
-            <i className="ri-inbox-line text-5xl text-gray-300 mb-4"></i>
-            <p className="text-xl text-gray-500">No categories found.</p>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-gradient-to-br from-store-navy to-store-navy-light py-16">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl font-bold text-white mb-4">Can't Find What You're Looking For?</h2>
-          <p className="text-xl text-white/90 mb-8 leading-relaxed">
-            Try our advanced search or contact our team for personalised product recommendations
+    <main className="bg-white">
+      <section className="relative isolate min-h-[52vh] overflow-hidden bg-black text-white md:min-h-[58vh]">
+        <img
+          src={`${PAGE_HERO_IMAGES.categories}?v=${HERO_IMAGE_VERSION}`}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover object-[70%_center]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/40 to-black/10" />
+        <div className="relative z-10 mx-auto flex min-h-[52vh] max-w-[1400px] flex-col justify-end px-4 py-12 sm:px-6 md:min-h-[58vh] md:py-16">
+          <p className="text-sm font-medium text-brand-champagne">Collections</p>
+          <h1 className="mt-3 max-w-xl text-balance text-4xl font-semibold tracking-tight sm:text-5xl md:text-6xl">
+            Shop by category
+          </h1>
+          <p className="mt-4 max-w-md text-pretty text-base leading-relaxed text-white/75">
+            Fashion, bags, beauty, and home imports, gathered in one place.
           </p>
-          <div className="flex flex-wrap gap-4 justify-center">
-            <Link
-              href="/shop"
-              className="inline-flex items-center gap-2 bg-white text-store-ink px-8 py-4 rounded-full font-medium hover:bg-store-surface transition-colors whitespace-nowrap"
-            >
-              <i className="ri-search-line"></i>
-              Search All Products
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-[1400px] px-4 pb-16 pt-8 sm:px-6 sm:pt-10 md:pb-20 md:pt-14">
+        <CategoryGrid categories={categories} />
+      </section>
+
+      <section className="bg-black">
+        <div className="mx-auto flex max-w-[1400px] flex-col items-start justify-between gap-6 px-4 py-12 sm:px-6 md:flex-row md:items-center md:py-14">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Looking for something specific?</h2>
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-white/65">
+              Browse the full shop, or message us and we will help you find it.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/shop" className="inline-flex h-12 items-center rounded-full bg-white px-6 text-sm font-semibold text-black">
+              Shop all
             </Link>
             <Link
               href="/contact"
-              className="inline-flex items-center gap-2 bg-store-navy-light text-white px-8 py-4 rounded-full font-medium hover:bg-store-surface0 transition-colors whitespace-nowrap"
+              className="inline-flex h-12 items-center rounded-full border border-brand-champagne/70 px-6 text-sm font-semibold text-brand-champagne"
             >
-              <i className="ri-customer-service-line"></i>
-              Contact Support
+              Contact us
             </Link>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

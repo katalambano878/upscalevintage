@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
+import { usePathname } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import MobileBottomNav from '@/components/MobileBottomNav';
@@ -26,17 +27,19 @@ export default function StoreLayoutClient({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
   return (
     <CMSProvider>
       <Suspense fallback={null}>
         <NavigationProgress />
       </Suspense>
       <ScrollToTop />
-      <div className="min-h-screen bg-brand-cream">
+      <div className="min-h-screen bg-white">
         <PWASplash />
         <PWAInstaller />
         <Header />
-        <ErrorBoundary>
+        <ErrorBoundary key={pathname}>
           <div className="pwa-page-enter">
             {children}
           </div>

@@ -1,345 +1,187 @@
-import { CONTACT_PHONE, CONTACT_PHONE_DISPLAY, SUPPORT_EMAIL, WHATSAPP_LINK } from '@/lib/brand';
+import Link from 'next/link';
+import EditorialHero from '@/components/EditorialHero';
+import PolicySection, { PolicyContact } from '@/components/PolicySection';
+import { APP_TITLE, PAGE_HERO_IMAGES } from '@/lib/brand';
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-white">
-      <div className="bg-gradient-to-br from-brand-cream via-white to-amber-50 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-5xl font-bold text-gray-900 mb-6">Terms & Conditions</h1>
-            <p className="text-xl text-gray-600 leading-relaxed">
-              Please read these terms carefully before using our website and services.
-            </p>
-            <p className="text-sm text-gray-500 mt-4">Last updated: February 2026</p>
-          </div>
-        </div>
-      </div>
+    <main className="bg-white">
+      <EditorialHero
+        eyebrow="The house rules"
+        title="Terms & conditions"
+        subtitle="Please read these terms before using the website and placing an order."
+        image={PAGE_HERO_IMAGES.about}
+      />
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="prose prose-lg max-w-none">
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">1. Agreement to Terms</h2>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              By accessing and using this website (YOUR_APP_TITLE), you accept and agree to be bound by these Terms and Conditions. If you do not agree with any part of these terms, you must not use our website or services.
-            </p>
-            <p className="text-gray-600 leading-relaxed">
-              These terms apply to all visitors, users, and customers who access or use our service. We reserve the right to update or modify these terms at any time without prior notice. Your continued use of the website following any changes indicates your acceptance of the new terms.
-            </p>
-          </section>
+      <article className="mx-auto max-w-3xl px-4 py-6 sm:px-6 md:py-10">
+        <p className="text-sm text-brand-mauve">Last updated: February 2026</p>
 
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">2. Use of Website</h2>
-            
-            <h3 className="text-xl font-bold text-gray-900 mb-4 mt-8">2.1 Permitted Use</h3>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              You may use our website for lawful purposes only. You agree not to:
-            </p>
-            <ul className="space-y-2 text-gray-600 mb-6">
-              <li className="flex items-start gap-2">
-                <i className="ri-close-circle-line text-red-500 mt-1"></i>
-                <span>Violate any local, national, or international law or regulation</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-close-circle-line text-red-500 mt-1"></i>
-                <span>Transmit any harmful code, viruses, or malicious software</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-close-circle-line text-red-500 mt-1"></i>
-                <span>Attempt to gain unauthorised access to our systems or networks</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-close-circle-line text-red-500 mt-1"></i>
-                <span>Use the website for fraudulent purposes or in connection with any criminal activity</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-close-circle-line text-red-500 mt-1"></i>
-                <span>Impersonate any person or entity or misrepresent your affiliation</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-close-circle-line text-red-500 mt-1"></i>
-                <span>Interfere with or disrupt the website or servers</span>
-              </li>
-            </ul>
+        <PolicySection number="01" title="Agreement to terms">
+          <p>
+            By accessing and using this website ({APP_TITLE}), you accept and agree to be bound by these Terms and Conditions. If you do not agree with any part of these terms, you must not use our website or services.
+          </p>
+          <p>
+            These terms apply to all visitors, users, and customers who access or use our service. We reserve the right to update or modify these terms at any time without prior notice. Your continued use of the website following any changes indicates your acceptance of the new terms.
+          </p>
+        </PolicySection>
 
-            <h3 className="text-xl font-bold text-gray-900 mb-4 mt-8">2.2 Account Responsibility</h3>
-            <p className="text-gray-600 leading-relaxed">
-              If you create an account, you are responsible for maintaining the confidentiality of your login credentials and for all activities that occur under your account. You must notify us immediately of any unauthorised use of your account or any other security breach.
-            </p>
-          </section>
+        <PolicySection number="02" title="Use of website">
+          <h3>Permitted use</h3>
+          <p>You may use our website for lawful purposes only. You agree not to:</p>
+          <ul>
+            <li>Violate any local, national, or international law or regulation</li>
+            <li>Transmit any harmful code, viruses, or malicious software</li>
+            <li>Attempt to gain unauthorised access to our systems or networks</li>
+            <li>Use the website for fraudulent purposes or in connection with any criminal activity</li>
+            <li>Impersonate any person or entity or misrepresent your affiliation</li>
+            <li>Interfere with or disrupt the website or servers</li>
+          </ul>
+          <h3>Account responsibility</h3>
+          <p>
+            If you create an account, you are responsible for maintaining the confidentiality of your login credentials and for all activities that occur under your account. You must notify us immediately of any unauthorised use of your account or any other security breach.
+          </p>
+        </PolicySection>
 
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">3. Products & Pricing</h2>
-            
-            <h3 className="text-xl font-bold text-gray-900 mb-4 mt-8">3.1 Product Information</h3>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              We make every effort to display our products accurately, including colours, descriptions, and specifications. However, we cannot guarantee that your device's display will accurately reflect product colours or that product descriptions are error-free.
-            </p>
+        <PolicySection number="03" title="Products & pricing">
+          <h3>Product information</h3>
+          <p>
+            We make every effort to display our products accurately, including colours, descriptions, and specifications. However, we cannot guarantee that your device&apos;s display will accurately reflect product colours or that product descriptions are error-free.
+          </p>
+          <h3>Pricing</h3>
+          <p>All prices are listed in Ghana Cedis (GHS) and include VAT where applicable. We reserve the right to:</p>
+          <ul>
+            <li>Modify prices at any time without notice</li>
+            <li>Correct pricing errors, even after an order is placed</li>
+            <li>Limit quantities available for purchase</li>
+            <li>Discontinue products at any time</li>
+          </ul>
+          <p>
+            If a product is listed at an incorrect price due to an error, we will contact you before processing your order. You may choose to cancel the order or proceed at the correct price.
+          </p>
+          <h3>Availability</h3>
+          <p>
+            Product availability is subject to change without notice. If an ordered item becomes unavailable, we will notify you and offer a refund or replacement option.
+          </p>
+        </PolicySection>
 
-            <h3 className="text-xl font-bold text-gray-900 mb-4 mt-8">3.2 Pricing</h3>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              All prices are listed in Ghana Cedis (GHS) and include VAT where applicable. We reserve the right to:
-            </p>
-            <ul className="space-y-2 text-gray-600 mb-6">
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-brand-espresso mt-1"></i>
-                <span>Modify prices at any time without notice</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-brand-espresso mt-1"></i>
-                <span>Correct pricing errors, even after an order is placed</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-brand-espresso mt-1"></i>
-                <span>Limit quantities available for purchase</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-brand-espresso mt-1"></i>
-                <span>Discontinue products at any time</span>
-              </li>
-            </ul>
-            <p className="text-gray-600 leading-relaxed">
-              If a product is listed at an incorrect price due to an error, we will contact you before processing your order. You may choose to cancel the order or proceed at the correct price.
-            </p>
+        <PolicySection number="04" title="Orders & payment">
+          <h3>Order acceptance</h3>
+          <p>Placing an order does not guarantee acceptance. We reserve the right to refuse or cancel any order for reasons including:</p>
+          <ul>
+            <li>Product unavailability or pricing errors</li>
+            <li>Suspected fraudulent or unauthorised transactions</li>
+            <li>Inaccuracies in product or pricing information</li>
+            <li>Failure to meet age or eligibility requirements</li>
+          </ul>
+          <h3>Payment</h3>
+          <p>We accept the following payment methods. We do not accept payment on delivery:</p>
+          <ul>
+            <li>MOMO (Mobile Money)</li>
+            <li>Instant bank transfer</li>
+            <li>Cash, in store only</li>
+            <li>Visa card payment</li>
+          </ul>
+          <p>
+            Payment must be received in full before order dispatch. By providing payment information, you confirm that you are authorised to use the payment method and that there are sufficient funds available.
+          </p>
+          <h3>Order modifications</h3>
+          <p>
+            You may modify or cancel your order within 1 hour of placement. After this time, orders enter processing and cannot be changed. Contact customer service immediately if you need to make changes.
+          </p>
+        </PolicySection>
 
-            <h3 className="text-xl font-bold text-gray-900 mb-4 mt-8">3.3 Availability</h3>
-            <p className="text-gray-600 leading-relaxed">
-              Product availability is subject to change without notice. If an ordered item becomes unavailable, we will notify you and offer a refund or replacement option.
-            </p>
-          </section>
+        <PolicySection number="05" title="Shipping & delivery">
+          <p>
+            Delivery times and costs vary by location and shipping method selected. See our{' '}
+            <Link href="/shipping">shipping page</Link> for details.
+          </p>
+          <p>
+            Risk of loss and title for products pass to you upon delivery to the carrier. We are not responsible for delays caused by the shipping carrier or circumstances beyond our control, including weather, strikes, and customs.
+          </p>
+          <p>
+            You must provide accurate and complete delivery information. We are not responsible for delivery failures due to incorrect addresses.
+          </p>
+        </PolicySection>
 
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">4. Orders & Payment</h2>
-            
-            <h3 className="text-xl font-bold text-gray-900 mb-4 mt-8">4.1 Order Acceptance</h3>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              Placing an order does not guarantee acceptance. We reserve the right to refuse or cancel any order for reasons including:
-            </p>
-            <ul className="space-y-2 text-gray-600 mb-6">
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-brand-espresso mt-1"></i>
-                <span>Product unavailability or pricing errors</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-brand-espresso mt-1"></i>
-                <span>Suspected fraudulent or unauthorised transactions</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-brand-espresso mt-1"></i>
-                <span>Inaccuracies in product or pricing information</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-brand-espresso mt-1"></i>
-                <span>Failure to meet age or eligibility requirements</span>
-              </li>
-            </ul>
+        <PolicySection number="06" title="Returns & refunds">
+          <p>
+            Refunds and exchanges are governed by our official refund policy on the{' '}
+            <Link href="/returns#refund-policy">returns and refunds</Link> page. Refunds may be approved for defective delivery, order mix ups, payment for sold out items, or misplaced in store packages.
+          </p>
+          <p>
+            Exchanges require items to be unworn, undamaged, in original packaging with tags, and requested within 24 hours of purchase.
+          </p>
+          <p>
+            Items received outside these criteria cannot be returned or exchanged. Approved refunds are issued to the original payment method.
+          </p>
+        </PolicySection>
 
-            <h3 className="text-xl font-bold text-gray-900 mb-4 mt-8">4.2 Payment</h3>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              We accept the following payment methods (we do not accept payment on delivery):
-            </p>
-            <div className="bg-gray-50 p-6 rounded-xl mb-6">
-              <ul className="space-y-2 text-gray-600">
-                <li className="flex items-center gap-2">
-                  <i className="ri-smartphone-line text-brand-espresso"></i>
-                  <span>MOMO (Mobile Money)</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <i className="ri-bank-line text-brand-espresso"></i>
-                  <span>Instant Bank Transfer</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <i className="ri-money-cny-circle-line text-brand-espresso"></i>
-                  <span>Cash (in store only)</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <i className="ri-bank-card-line text-brand-espresso"></i>
-                  <span>Visa Card Payment</span>
-                </li>
-              </ul>
-            </div>
-            <p className="text-gray-600 leading-relaxed">
-              Payment must be received in full before order dispatch. By providing payment information, you confirm that you are authorised to use the payment method and that there are sufficient funds available.
-            </p>
+        <PolicySection number="07" title="Intellectual property">
+          <p>
+            All content on this website, including text, graphics, logos, images, videos, and software, is the property of {APP_TITLE} or its content suppliers and is protected by copyright, trademark, and other intellectual property laws.
+          </p>
+          <p>
+            You may not reproduce, distribute, modify, create derivative works of, publicly display, or otherwise use any content from this website without our express written permission.
+          </p>
+          <p>Product names, logos, and brands are the property of their respective owners and are used for identification purposes only.</p>
+        </PolicySection>
 
-            <h3 className="text-xl font-bold text-gray-900 mb-4 mt-8">4.3 Order Modifications</h3>
-            <p className="text-gray-600 leading-relaxed">
-              You may modify or cancel your order within 1 hour of placement. After this time, orders enter processing and cannot be changed. Contact customer service immediately if you need to make changes.
-            </p>
-          </section>
+        <PolicySection number="08" title="User content">
+          <p>
+            You may submit reviews, comments, and other content to our website. By doing so, you grant us a non-exclusive, royalty-free, perpetual, worldwide licence to use, reproduce, modify, and display such content.
+          </p>
+          <p>You are solely responsible for your content and must ensure it:</p>
+          <ul>
+            <li>Does not violate any laws or third party rights</li>
+            <li>Is not defamatory, offensive, or inappropriate</li>
+            <li>Does not contain viruses or malicious code</li>
+            <li>Is truthful and based on your genuine experience</li>
+          </ul>
+          <p>We reserve the right to remove any content that violates these terms or that we deem inappropriate.</p>
+        </PolicySection>
 
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">5. Shipping & Delivery</h2>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              Delivery times and costs vary by location and shipping method selected. See our Shipping Policy for detailed information.
-            </p>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              Risk of loss and title for products pass to you upon delivery to the carrier. We are not responsible for delays caused by the shipping carrier or circumstances beyond our control (weather, strikes, customs, etc.).
-            </p>
-            <p className="text-gray-600 leading-relaxed">
-              You must provide accurate and complete delivery information. We are not responsible for delivery failures due to incorrect addresses.
-            </p>
-          </section>
+        <PolicySection number="09" title="Limitation of liability">
+          <p>To the fullest extent permitted by law, {APP_TITLE} shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from:</p>
+          <ul>
+            <li>Your use or inability to use the website or services</li>
+            <li>Unauthorised access to or alteration of your data</li>
+            <li>Errors or omissions in website content</li>
+            <li>Product defects or performance issues</li>
+            <li>Delivery delays or failures</li>
+          </ul>
+          <p>
+            Our total liability for any claim arising from your use of the website or purchase of products shall not exceed the amount you paid for the product or service in question.
+          </p>
+        </PolicySection>
 
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">6. Returns & Refunds</h2>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              Refunds and exchanges are governed by our official refund policy on the{' '}
-              <a href="/returns#refund-policy" className="text-brand-espresso font-semibold hover:underline">
-                Returns & Refunds
-              </a>{' '}
-              page. Refunds may be approved for defective delivery, order mix ups, payment for sold out items, or misplaced in store packages.
-            </p>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              Exchanges require items to be unworn, undamaged, in original packaging with tags, and requested within 24 hours of purchase.
-            </p>
-            <p className="text-gray-600 leading-relaxed">
-              Items received outside these criteria cannot be returned or exchanged. Approved refunds are issued to the original payment method.
-            </p>
-          </section>
+        <PolicySection number="10" title="Indemnification">
+          <p>
+            You agree to indemnify and hold harmless {APP_TITLE}, its affiliates, officers, directors, employees, and agents from any claims, damages, losses, liabilities, and expenses (including legal fees) arising from your use of the website, violation of these terms, or infringement of any third party rights.
+          </p>
+        </PolicySection>
 
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">7. Intellectual Property</h2>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              All content on this website, including text, graphics, logos, images, videos, and software, is the property of YOUR_APP_TITLE or its content suppliers and is protected by copyright, trademark, and other intellectual property laws.
-            </p>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              You may not reproduce, distribute, modify, create derivative works of, publicly display, or otherwise use any content from this website without our express written permission.
-            </p>
-            <p className="text-gray-600 leading-relaxed">
-              Product names, logos, and brands are the property of their respective owners and are used for identification purposes only.
-            </p>
-          </section>
+        <PolicySection number="11" title="Governing law & disputes">
+          <p>
+            These terms are governed by the laws of Ghana. Any disputes arising from these terms or your use of the website shall be subject to the exclusive jurisdiction of the courts of Ghana.
+          </p>
+          <p>Before initiating any legal action, you agree to first contact us to seek resolution through informal negotiation.</p>
+        </PolicySection>
 
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">8. User Content</h2>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              You may submit reviews, comments, and other content to our website. By doing so, you grant us a non-exclusive, royalty-free, perpetual, worldwide licence to use, reproduce, modify, and display such content.
-            </p>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              You are solely responsible for your content and must ensure it:
-            </p>
-            <ul className="space-y-2 text-gray-600 mb-6">
-              <li className="flex items-start gap-2">
-                <i className="ri-checkbox-circle-line text-brand-espresso mt-1"></i>
-                <span>Does not violate any laws or third party rights</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-checkbox-circle-line text-brand-espresso mt-1"></i>
-                <span>Is not defamatory, offensive, or inappropriate</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-checkbox-circle-line text-brand-espresso mt-1"></i>
-                <span>Does not contain viruses or malicious code</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-checkbox-circle-line text-brand-espresso mt-1"></i>
-                <span>Is truthful and based on your genuine experience</span>
-              </li>
-            </ul>
-            <p className="text-gray-600 leading-relaxed">
-              We reserve the right to remove any content that violates these terms or that we deem inappropriate.
-            </p>
-          </section>
+        <PolicySection number="12" title="Severability">
+          <p>
+            If any provision of these terms is found to be invalid or unenforceable, the remaining provisions shall continue in full force and effect.
+          </p>
+        </PolicySection>
 
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">9. Limitation of Liability</h2>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              To the fullest extent permitted by law, YOUR_APP_TITLE shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from:
-            </p>
-            <ul className="space-y-2 text-gray-600 mb-6">
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-gray-400 mt-1"></i>
-                <span>Your use or inability to use the website or services</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-gray-400 mt-1"></i>
-                <span>Unauthorised access to or alteration of your data</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-gray-400 mt-1"></i>
-                <span>Errors or omissions in website content</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-gray-400 mt-1"></i>
-                <span>Product defects or performance issues</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <i className="ri-arrow-right-s-line text-gray-400 mt-1"></i>
-                <span>Delivery delays or failures</span>
-              </li>
-            </ul>
-            <p className="text-gray-600 leading-relaxed">
-              Our total liability for any claim arising from your use of the website or purchase of products shall not exceed the amount you paid for the product or service in question.
-            </p>
-          </section>
+        <PolicySection number="13" title="Contact">
+          <p>For questions about these terms, reach us here:</p>
+          <PolicyContact />
+        </PolicySection>
 
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">10. Indemnification</h2>
-            <p className="text-gray-600 leading-relaxed">
-              You agree to indemnify and hold harmless YOUR_APP_TITLE, its affiliates, officers, directors, employees, and agents from any claims, damages, losses, liabilities, and expenses (including legal fees) arising from your use of the website, violation of these terms, or infringement of any third party rights.
-            </p>
-          </section>
-
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">11. Governing Law & Disputes</h2>
-            <p className="text-gray-600 leading-relaxed mb-4">
-              These terms are governed by the laws of Ghana. Any disputes arising from these terms or your use of the website shall be subject to the exclusive jurisdiction of the courts of Ghana.
-            </p>
-            <p className="text-gray-600 leading-relaxed">
-              Before initiating any legal action, you agree to first contact us to seek resolution through informal negotiation.
-            </p>
-          </section>
-
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">12. Severability</h2>
-            <p className="text-gray-600 leading-relaxed">
-              If any provision of these terms is found to be invalid or unenforceable, the remaining provisions shall continue in full force and effect.
-            </p>
-          </section>
-
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">13. Contact Information</h2>
-            <p className="text-gray-600 leading-relaxed mb-6">
-              For questions about these Terms and Conditions, please contact us:
-            </p>
-
-            <div className="bg-gray-50 border border-gray-200 p-8 rounded-xl">
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <i className="ri-mail-line text-brand-espresso text-xl mt-1"></i>
-                  <div>
-                    <p className="font-medium text-gray-900">Email</p>
-                    <a href={`mailto:${SUPPORT_EMAIL}`} className="text-brand-espresso hover:underline">{SUPPORT_EMAIL}</a>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <i className="ri-phone-line text-brand-espresso text-xl mt-1"></i>
-                  <div>
-                    <p className="font-medium text-gray-900">Phone</p>
-                    <a href={`tel:${CONTACT_PHONE}`} className="text-brand-espresso hover:underline">{CONTACT_PHONE_DISPLAY}</a> · WhatsApp <a href={WHATSAPP_LINK} className="text-brand-espresso hover:underline">{CONTACT_PHONE_DISPLAY}</a>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <i className="ri-map-pin-line text-brand-espresso text-xl mt-1"></i>
-                  <div>
-                    <p className="font-medium text-gray-900">Address</p>
-                    <p className="text-gray-600">YOUR_APP_TITLE<br />YOUR_ADDRESS</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <div className="bg-brand-nude/30 border-2 border-brand-nude/70 p-8 rounded-xl text-center">
-            <i className="ri-checkbox-circle-line text-4xl text-brand-espresso mb-4"></i>
-            <p className="text-gray-600 leading-relaxed">
-              By using our website, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+        <p className="mt-10 rounded-[1.5rem] bg-black px-6 py-8 text-center text-sm leading-relaxed text-white/80">
+          By using this website, you acknowledge that you have read, understood, and agree to these terms.
+        </p>
+      </article>
+    </main>
   );
 }

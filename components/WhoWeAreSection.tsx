@@ -36,7 +36,7 @@ export default function WhoWeAreSection() {
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           <AnimatedSection className="order-2 lg:order-1">
             <span className="brand-eyebrow mb-4 block">Our vibe</span>
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-display text-brand-espresso mb-6 tracking-tight font-semibold">
+            <h2 className="mb-6 text-4xl font-semibold tracking-tight text-brand-espresso md:text-5xl">
               Who We Are
             </h2>
             <div className="space-y-5 brand-body">
@@ -106,9 +106,9 @@ export default function WhoWeAreSection() {
               </div>
             </div>
 
-            <div className="absolute -bottom-5 -left-5 glass p-5 rounded-2xl shadow-luxury max-w-xs hidden md:block">
-              <p className="font-display text-lg font-semibold text-brand-espresso">Trending daily</p>
-              <p className="text-sm text-brand-cocoa/80 font-medium mt-1">Lifestyle · Imports · Appliances</p>
+            <div className="absolute -bottom-5 -left-5 hidden max-w-xs rounded-2xl border border-black/[0.06] bg-white p-5 md:block">
+              <p className="font-script text-2xl leading-tight text-brand-espresso">Good things ahead</p>
+              <p className="mt-1 text-sm font-medium text-brand-cocoa/70">Fashion · Home · Lifestyle</p>
             </div>
           </AnimatedSection>
         </div>

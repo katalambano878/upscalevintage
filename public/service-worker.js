@@ -1,5 +1,26 @@
 // UPSCALE VINTAGE - Service Worker
-const CACHE_VERSION = 'app-v1.0';
+const CACHE_VERSION = 'app-v1.2-kill-local';
+
+// Local dev: drop this worker immediately so leftover caches cannot hide UI updates.
+if (self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1') {
+  self.addEventListener('install', (event) => {
+    event.waitUntil(self.skipWaiting());
+  });
+  self.addEventListener('activate', (event) => {
+    event.waitUntil(
+      caches.keys()
+        .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+        .then(() => self.registration.unregister())
+        .then(() => self.clients.claim())
+        .then(() => self.clients.matchAll({ type: 'window' }))
+        .then((clients) => {
+          clients.forEach((client) => {
+            if ('navigate' in client) client.navigate(client.url);
+          });
+        })
+    );
+  });
+} else {
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${CACHE_VERSION}`;
 const IMAGE_CACHE = `images-${CACHE_VERSION}`;
@@ -78,6 +99,10 @@ self.addEventListener('fetch', (event) => {
 
   // Skip chrome-extension, ws, and other non-http
   if (!url.protocol.startsWith('http')) return;
+
+  // Never intercept localhost — leftover SWs from other stores on :3000
+  // otherwise serve stale webpack chunks and crash the page.
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return;
 
   // Skip API routes that modify data
   if (url.pathname.startsWith('/api/payment')) return;
@@ -276,3 +301,4 @@ self.addEventListener('periodicsync', (event) => {
     );
   }
 });
+}

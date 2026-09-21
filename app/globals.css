@@ -5,11 +5,11 @@
 
 @layer base {
   body {
-    @apply font-sans text-brand-cocoa bg-brand-cream antialiased selection:bg-brand-mauve/30 selection:text-brand-espresso;
+    @apply font-sans text-brand-cocoa bg-brand-cream antialiased selection:bg-brand-nude selection:text-brand-espresso;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display font-semibold tracking-tight text-brand-espresso;
+    @apply font-sans font-semibold tracking-tight text-brand-espresso;
   }
 
   /* Admin uses UI sans so labels stay readable (Cormorant + tracking-tight eats spaces). */
@@ -175,6 +175,26 @@
 
   100% {
     background-position: 200% 0;
+  }
+}
+
+@keyframes announcement-marquee {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.announcement-marquee {
+  animation: announcement-marquee 22s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .announcement-marquee {
+    animation: none;
   }
 }
 
@@ -438,10 +458,10 @@ img {
    ======================================== */
 
 .glass {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: #ffffff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid rgba(23, 23, 23, 0.06);
 }
 
 .glass-dark {
@@ -639,12 +659,10 @@ img {
 @keyframes pageSlideIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -759,86 +777,97 @@ img {
 }
 
 /* ========================================
-   UPSCALE VINTAGE — LIFESTYLE / SOCIAL-COMMERCE THEME
-   Display: Cormorant Garamond (500–600) · UI: Manrope (400–600)
+   UPSCALE VINTAGE — BLACK, WHITE, GOLD
+   Display/UI: Plus Jakarta Sans · Notes: Caveat
    ======================================== */
 
 body {
-  background-color: #FAF7F2;
-  color: #4A403B;
+  background-color: #FFFFFF;
+  color: #111111;
 }
 
 .brand-eyebrow {
-  @apply font-sans text-xs sm:text-sm font-medium tracking-normal text-brand-mauve;
+  @apply font-sans text-xs sm:text-sm font-medium tracking-normal text-brand-champagne;
 }
 
 .brand-body {
-  @apply font-sans text-base sm:text-lg text-brand-cocoa/90 leading-relaxed font-normal;
+  @apply font-sans text-base sm:text-lg text-brand-cocoa/80 leading-relaxed font-normal;
 }
 
 .brand-body-lg {
-  @apply font-sans text-lg sm:text-xl text-brand-cocoa/90 leading-relaxed font-normal;
+  @apply font-sans text-lg sm:text-xl text-brand-cocoa/80 leading-relaxed font-normal;
 }
 
 ::selection {
-  background-color: #EDE3D7;
-  color: #8A6A58;
+  background-color: #C5A46A;
+  color: #111111;
 }
 
 .btn-luxury-primary,
 .btn-brand-primary {
-  @apply inline-flex items-center justify-center px-8 py-3.5 rounded-full font-sans text-sm font-semibold tracking-normal transition-all duration-300;
-  background: #4A403B;
-  color: #FAF7F2;
-  box-shadow: 0 4px 20px rgba(74, 64, 59, 0.15);
+  @apply inline-flex items-center justify-center px-8 py-3.5 rounded-full font-sans text-sm font-semibold tracking-normal;
+  background: #111111;
+  color: #FFFFFF;
+  box-shadow: none;
+  transition-property: background-color, color, transform;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
 }
 
 .btn-luxury-primary:hover,
 .btn-brand-primary:hover {
-  background: #8A6A58;
-  box-shadow: 0 8px 30px rgba(138, 106, 88, 0.25);
-  transform: translateY(-2px);
+  background: #C5A46A;
+  color: #111111;
+  transform: none;
+}
+
+.btn-luxury-primary:active,
+.btn-brand-primary:active {
+  transform: scale(0.96);
 }
 
 .btn-luxury-outline,
 .btn-brand-outline {
-  @apply inline-flex items-center justify-center px-8 py-3.5 rounded-full font-sans text-sm font-semibold tracking-normal border transition-all duration-300;
-  border-color: rgba(74, 64, 59, 0.15);
-  color: #4A403B;
+  @apply inline-flex items-center justify-center px-8 py-3.5 rounded-full font-sans text-sm font-semibold tracking-normal border;
+  border-color: rgba(197, 164, 106, 0.55);
+  color: #111111;
   background: transparent;
+  transition-property: background-color, border-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
 }
 
 .btn-luxury-outline:hover,
 .btn-brand-outline:hover {
-  background: #4A403B;
-  border-color: #4A403B;
-  color: #FAF7F2;
-  box-shadow: 0 8px 30px rgba(74, 64, 59, 0.15);
-  transform: translateY(-2px);
+  background: #111111;
+  border-color: #111111;
+  color: #FFFFFF;
+  transform: none;
 }
 
 .btn-brand-soft {
-  @apply inline-flex items-center justify-center px-8 py-3.5 rounded-full font-sans text-sm font-medium tracking-normal border transition-all duration-300;
-  border-color: rgba(237, 227, 215, 0.6);
-  color: #8A6A58;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  @apply inline-flex items-center justify-center px-8 py-3.5 rounded-full font-sans text-sm font-medium tracking-normal border;
+  border-color: rgba(197, 164, 106, 0.45);
+  color: #111111;
+  background: #ffffff;
+  transition-property: background-color, border-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
 }
 
 .btn-brand-soft:hover {
-  background: rgba(237, 227, 215, 0.9);
-  border-color: rgba(166, 160, 137, 0.5);
-  transform: translateY(-1px);
+  background: #111111;
+  border-color: #111111;
+  color: #C5A46A;
 }
 
 /* Glassmorphism Utilities */
 .glass {
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 8px 32px 0 rgba(138, 106, 88, 0.05);
+  background: #ffffff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid rgba(23, 23, 23, 0.06);
+  box-shadow: none;
 }
 
 .glass-dark {

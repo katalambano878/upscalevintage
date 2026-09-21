@@ -3,15 +3,13 @@
 import Link from 'next/link';
 import {
   APP_TITLE,
-  FOOTER_TAGLINE,
-  LOGO_PATH,
-  LOGO_CLASS_HEADER,
   CONTACT_ADDRESS,
   CONTACT_PHONE_DISPLAY,
   WHATSAPP_LINK,
   INSTAGRAM_HANDLE,
   INSTAGRAM_URL,
 } from '@/lib/brand';
+import BrandMark from './BrandMark';
 import { useCMS } from '@/context/CMSContext';
 
 const SHOP_LINKS = [
@@ -34,32 +32,29 @@ const LEGAL_LINKS = [
   { label: 'Terms', href: '/terms' },
 ];
 
+const socialButtonClass =
+  'flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white transition-colors duration-150 hover:border-brand-champagne hover:text-brand-champagne';
+
+const linkClass =
+  'text-xs sm:text-sm text-white/70 transition-colors duration-150 hover:text-brand-champagne';
+
 export default function Footer() {
   const { getSetting } = useCMS();
 
   const siteName = getSetting('site_name') || APP_TITLE;
-  const siteLogo = getSetting('site_logo') || LOGO_PATH;
   const contactPhone = getSetting('contact_phone') || CONTACT_PHONE_DISPLAY;
   const contactAddress = getSetting('contact_address') || CONTACT_ADDRESS;
   const socialInstagram = getSetting('social_instagram') || INSTAGRAM_URL;
   const phoneHref = `tel:${contactPhone.replace(/\s/g, '')}`;
 
   return (
-    <footer className="mt-10 border-t border-brand-nude/60 bg-brand-cream pb-24 lg:pb-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
-        {/* Brand row */}
+    <footer className="mt-10 bg-black pb-24 text-white lg:pb-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4 min-w-0">
-            <Link href="/" className="shrink-0">
-              <img
-                src={siteLogo}
-                alt={siteName}
-                className={`${LOGO_CLASS_HEADER} h-8 sm:h-9 w-auto max-w-[140px] object-contain`}
-              />
+          <div className="flex min-w-0 items-center gap-4">
+            <Link href="/" className="shrink-0" aria-label={`${siteName} homepage`}>
+              <BrandMark compact className="text-white" />
             </Link>
-            <p className="text-sm sm:text-base text-brand-cocoa/80 font-medium leading-snug line-clamp-3 sm:max-w-sm">
-              {FOOTER_TAGLINE}
-            </p>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -67,7 +62,7 @@ export default function Footer() {
               href={socialInstagram}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-9 h-9 rounded-full border border-brand-nude/80 bg-white/60 flex items-center justify-center text-brand-espresso hover:bg-brand-espresso hover:text-brand-cream transition-colors"
+              className={socialButtonClass}
               aria-label="Instagram"
             >
               <i className="ri-instagram-line text-base" />
@@ -76,35 +71,27 @@ export default function Footer() {
               href={WHATSAPP_LINK}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-9 h-9 rounded-full border border-brand-nude/80 bg-white/60 flex items-center justify-center text-brand-espresso hover:bg-brand-espresso hover:text-brand-cream transition-colors"
+              className={socialButtonClass}
               aria-label="WhatsApp"
             >
               <i className="ri-whatsapp-line text-base" />
             </a>
-            <a
-              href={phoneHref}
-              className="w-9 h-9 rounded-full border border-brand-nude/80 bg-white/60 flex items-center justify-center text-brand-espresso hover:bg-brand-espresso hover:text-brand-cream transition-colors"
-              aria-label="Call us"
-            >
+            <a href={phoneHref} className={socialButtonClass} aria-label="Call us">
               <i className="ri-phone-line text-base" />
             </a>
           </div>
         </div>
 
-        {/* Links — 3 compact columns on mobile */}
         <nav
           className="mt-6 grid grid-cols-3 gap-x-4 gap-y-5 sm:mt-8 sm:gap-x-8"
           aria-label="Footer navigation"
         >
           <div>
-            <p className="text-xs font-semibold text-brand-mauve mb-2.5">Shop</p>
+            <p className="mb-2.5 text-xs font-semibold text-brand-champagne">Shop</p>
             <ul className="space-y-1.5">
               {SHOP_LINKS.map((link) => (
                 <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-xs sm:text-sm text-brand-cocoa/80 hover:text-brand-espresso transition-colors"
-                  >
+                  <Link href={link.href} className={linkClass}>
                     {link.label}
                   </Link>
                 </li>
@@ -112,14 +99,11 @@ export default function Footer() {
             </ul>
           </div>
           <div>
-            <p className="text-xs font-semibold text-brand-mauve mb-2.5">Help</p>
+            <p className="mb-2.5 text-xs font-semibold text-brand-champagne">Help</p>
             <ul className="space-y-1.5">
               {HELP_LINKS.map((link) => (
                 <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-xs sm:text-sm text-brand-cocoa/80 hover:text-brand-espresso transition-colors"
-                  >
+                  <Link href={link.href} className={linkClass}>
                     {link.label}
                   </Link>
                 </li>
@@ -127,14 +111,11 @@ export default function Footer() {
             </ul>
           </div>
           <div>
-            <p className="text-xs font-semibold text-brand-mauve mb-2.5">Legal</p>
+            <p className="mb-2.5 text-xs font-semibold text-brand-champagne">Legal</p>
             <ul className="space-y-1.5">
               {LEGAL_LINKS.map((link) => (
                 <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-xs sm:text-sm text-brand-cocoa/80 hover:text-brand-espresso transition-colors"
-                  >
+                  <Link href={link.href} className={linkClass}>
                     {link.label}
                   </Link>
                 </li>
@@ -143,31 +124,30 @@ export default function Footer() {
           </div>
         </nav>
 
-        {/* Contact — single compact row */}
-        <div className="mt-6 pt-5 border-t border-brand-nude/50 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-1 text-xs text-brand-cocoa/70">
-          <span className="inline-flex items-center gap-1.5 min-w-0">
-            <i className="ri-map-pin-line text-brand-espresso shrink-0" />
+        <div className="mt-6 flex flex-col gap-2 border-t border-white/10 pt-5 text-xs text-white/60 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-1">
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <i className="ri-map-pin-line shrink-0 text-brand-champagne" />
             <span className="truncate">{contactAddress}</span>
           </span>
-          <a href={phoneHref} className="inline-flex items-center gap-1.5 hover:text-brand-espresso transition-colors">
-            <i className="ri-phone-line text-brand-espresso shrink-0" />
+          <a href={phoneHref} className="inline-flex items-center gap-1.5 transition-colors hover:text-brand-champagne">
+            <i className="ri-phone-line shrink-0 text-brand-champagne" />
             {contactPhone}
           </a>
           <a
             href={socialInstagram}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 hover:text-brand-espresso transition-colors"
+            className="inline-flex items-center gap-1.5 transition-colors hover:text-brand-champagne"
           >
-            <i className="ri-instagram-line text-brand-espresso shrink-0" />
+            <i className="ri-instagram-line shrink-0 text-brand-champagne" />
             {INSTAGRAM_HANDLE}
           </a>
         </div>
 
-        {/* Copyright */}
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-[11px] text-brand-cocoa/55">
-          <p>&copy; {new Date().getFullYear()} {siteName}</p>
-          <p className="font-display font-medium italic text-brand-espresso/80 text-sm">Trending lifestyle. Import plug.</p>
+        <div className="mt-5 flex flex-col gap-2 text-[11px] text-white/45 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            &copy; {new Date().getFullYear()} {siteName}
+          </p>
         </div>
       </div>
     </footer>

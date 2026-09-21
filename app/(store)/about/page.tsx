@@ -53,7 +53,7 @@ export default function AboutPage() {
       <PageHero
         title="More Than A Brand"
         subtitle={TAGLINE}
-        backgroundImage="/hero/lifestyle-hero-2.png"
+        backgroundImage="/hero/hero-about.png"
       />
 
       <section className="py-20 bg-brand-cream overflow-hidden">
