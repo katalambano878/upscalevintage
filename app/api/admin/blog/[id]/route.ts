@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
+import { allow } from '@/lib/staff-gate';
 import { slugifyProduct } from '@/lib/product-seo';
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: Ctx) {
-  const auth = await verifyAuth(_request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(_request, 'blog.manage');
+  if (gate.denied) return gate.denied;
 
   const { id } = await context.params;
   try {
@@ -23,10 +22,8 @@ export async function GET(_request: Request, context: Ctx) {
 }
 
 export async function PATCH(request: Request, context: Ctx) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'blog.manage');
+  if (gate.denied) return gate.denied;
 
   const { id } = await context.params;
   try {
@@ -100,6 +97,7 @@ export async function PATCH(request: Request, context: Ctx) {
       ]
     );
 
+    await noteAction(request, gate.auth.user?.id, 'blog.update', 'blog', id);
     return NextResponse.json(updated);
   } catch (err: unknown) {
     console.error('[admin/blog/[id] PATCH]', err);
@@ -109,10 +107,8 @@ export async function PATCH(request: Request, context: Ctx) {
 }
 
 export async function DELETE(request: Request, context: Ctx) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'blog.manage');
+  if (gate.denied) return gate.denied;
 
   const { id } = await context.params;
   try {
@@ -120,6 +116,7 @@ export async function DELETE(request: Request, context: Ctx) {
     if (!result.length) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+    await noteAction(request, gate.auth.user?.id, 'blog.delete', 'blog', id);
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Delete failed';

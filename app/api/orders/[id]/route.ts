@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { verifyAuth, isStaffRole, getUserIdFromRequest } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
+import { allow } from '@/lib/staff-gate';
 import { getOrderById } from '@/lib/data/orders';
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -24,10 +26,9 @@ export async function GET(request: Request, context: Ctx) {
 }
 
 export async function PATCH(request: Request, context: Ctx) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'orders.update');
+  if (gate.denied) return gate.denied;
+  const auth = gate.auth;
 
   const { id } = await context.params;
   const body = await request.json();
@@ -95,6 +96,11 @@ export async function PATCH(request: Request, context: Ctx) {
         [id, body.status, body.status_note || null, auth.user?.id || null]
       );
     }
+
+    await noteAction(request, auth.user?.id, 'order.update', 'order', updated.id, {
+      order_number: updated.order_number,
+      status: body.status,
+    });
 
     return NextResponse.json(updated);
   } catch (err: unknown) {

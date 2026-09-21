@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
+import { accessFor, permissionForPath, type PermissionKey } from '@/lib/permissions';
 
 export default function AdminLayout({
   children,
@@ -30,9 +31,9 @@ export default function AdminLayout({
       }
 
       try {
-        const me = await apiData<{ user: { id: string; email: string; role: string; full_name?: string } | null }>(
-          '/api/auth/me'
-        );
+        const me = await apiData<{
+          user: { id: string; email: string; role: string; fullName?: string | null; permissions?: string[] } | null;
+        }>('/api/auth/me');
         const profile = me.user;
 
         if (!profile) {
@@ -137,100 +138,135 @@ export default function AdminLayout({
       title: 'Orders',
       icon: 'ri-shopping-bag-line',
       path: '/admin/orders',
-      badge: ''
+      badge: '',
+      permission: 'orders.view'
     },
     {
       title: 'Payments',
       icon: 'ri-refund-2-line',
       path: '/admin/payments/reconcile',
+      permission: 'payments.view'
     },
     {
       title: 'POS',
       icon: 'ri-store-3-line',
-      path: '/admin/pos'
+      path: '/admin/pos',
+      permission: 'pos.use'
     },
     {
       title: 'End of day',
       icon: 'ri-moon-clear-line',
-      path: '/admin/end-of-day'
+      path: '/admin/end-of-day',
+      permission: 'end_of_day'
     },
     {
       title: 'Products',
       icon: 'ri-box-3-line',
-      path: '/admin/products'
+      path: '/admin/products',
+      permission: 'products.manage'
     },
     {
       title: 'Sale Pricing',
       icon: 'ri-price-tag-2-line',
-      path: '/admin/sales'
+      path: '/admin/sales',
+      permission: 'sales.manage'
     },
     {
       title: 'Categories',
       icon: 'ri-folder-line',
-      path: '/admin/categories'
+      path: '/admin/categories',
+      permission: 'categories.manage'
     },
     {
       title: 'Customers',
       icon: 'ri-group-line',
-      path: '/admin/customers'
+      path: '/admin/customers',
+      permission: 'customers.view'
     },
     {
       title: 'Reviews',
       icon: 'ri-chat-smile-2-line',
-      path: '/admin/reviews'
+      path: '/admin/reviews',
+      permission: 'reviews.manage'
     },
     {
       title: 'Inventory',
       icon: 'ri-stack-line',
-      path: '/admin/inventory'
+      path: '/admin/inventory',
+      permission: 'inventory.manage'
     },
     {
       title: 'Analytics',
       icon: 'ri-bar-chart-line',
-      path: '/admin/analytics'
+      path: '/admin/analytics',
+      permission: 'analytics.view'
     },
     {
       title: 'Coupons',
       icon: 'ri-coupon-2-line',
-      path: '/admin/coupons'
+      path: '/admin/coupons',
+      permission: 'coupons.manage'
     },
     {
       title: 'Customer Insights',
       icon: 'ri-user-search-line',
       path: '/admin/customer-insights',
-      moduleId: 'customer-insights'
+      moduleId: 'customer-insights',
+      permission: 'customers.view'
     },
     {
       title: 'Notifications',
       icon: 'ri-notification-3-line',
       path: '/admin/notifications',
-      moduleId: 'notifications'
+      moduleId: 'notifications',
+      permission: 'notifications.send'
     },
     {
       title: 'SMS Debugger',
       icon: 'ri-message-2-line',
-      path: '/admin/test-sms'
+      path: '/admin/test-sms',
+      permission: 'notifications.send'
     },
 
     {
       title: 'Blog',
       icon: 'ri-article-line',
       path: '/admin/blog',
-      moduleId: 'blog'
+      moduleId: 'blog',
+      permission: 'blog.manage'
     },
     {
       title: 'Modules',
       icon: 'ri-puzzle-line',
-      path: '/admin/modules'
+      path: '/admin/modules',
+      permission: 'settings.manage'
+    },
+    {
+      title: 'Staff',
+      icon: 'ri-user-settings-line',
+      path: '/admin/staff',
+      permission: 'staff.manage'
+    },
+    {
+      title: 'Activity',
+      icon: 'ri-history-line',
+      path: '/admin/activity',
+      permission: 'staff.manage'
     },
   ];
 
+  const access = accessFor(userRole, user?.permissions);
+  const canOpen = (permission?: string) => !permission || access.includes(permission as PermissionKey);
+
   const visibleMenuItems = menuItems.filter((item) => {
+    if (!canOpen((item as { permission?: string }).permission)) return false;
     const moduleId = (item as { moduleId?: string }).moduleId;
     if (!moduleId) return true;
     if (enabledModules === null) return true;
     return enabledModules.includes(moduleId);
   });
+
+  const requiredPermission = permissionForPath(pathname);
 
   return (
     <div className="admin-shell min-h-screen bg-gray-50 font-sans tracking-normal">
@@ -311,6 +347,7 @@ export default function AdminLayout({
               >
                 <i className={`${isSidebarOpen ? 'ri-menu-fold-line' : 'ri-menu-unfold-line'} text-xl`}></i>
               </button>
+              {canOpen('sales.manage') && (
               <Link
                 href="/admin/sales"
                 className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg text-sm font-semibold border transition-colors shrink-0 ${
@@ -324,6 +361,7 @@ export default function AdminLayout({
                 <span className="sm:hidden">Sale</span>
                 <span className="hidden sm:inline">Store-wide sale</span>
               </Link>
+              )}
             </div>
 
             <div className="flex items-center space-x-2 lg:space-x-4">
@@ -341,8 +379,8 @@ export default function AdminLayout({
                     {user?.email?.charAt(0).toUpperCase() || 'A'}
                   </div>
                   <div className="text-left hidden md:block">
-                    <p className="text-sm font-semibold text-gray-900 capitalize">{userRole || 'Admin'}</p>
-                    <p className="text-xs text-gray-500 max-w-[100px] truncate">{user?.email}</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate max-w-[140px]">{user?.fullName || userRole || 'Admin'}</p>
+                    <p className="text-xs text-gray-500 max-w-[140px] truncate">{user?.email}</p>
                   </div>
                   <i className="ri-arrow-down-s-line text-gray-600"></i>
                 </button>
@@ -364,7 +402,14 @@ export default function AdminLayout({
         </header>
 
         <main className="p-4 lg:p-6">
-          {children}
+          {requiredPermission && !canOpen(requiredPermission) ? (
+            <div className="max-w-lg rounded-xl border border-gray-200 bg-white p-8">
+              <h1 className="text-2xl font-bold text-gray-900">This page is not in your access</h1>
+              <p className="mt-2 text-gray-600">Ask an admin if you need it. Your other tools are still in the menu.</p>
+            </div>
+          ) : (
+            children
+          )}
         </main>
       </div>
     </div>

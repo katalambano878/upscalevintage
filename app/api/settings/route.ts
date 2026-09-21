@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
+import { noteAction } from '@/lib/audit';
 import { verifyAuth } from '@/lib/auth';
+import { allow } from '@/lib/staff-gate';
 
 const PUBLIC_KEYS = new Set([
   'store_pricing',
@@ -65,18 +67,18 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
-
   try {
     const body = await request.json();
     const entries = body.settings && typeof body.settings === 'object' ? body.settings : body;
 
-    if (!entries || typeof entries !== 'object') {
+    if (!entries || typeof entries !== 'object' || Array.isArray(entries)) {
       return NextResponse.json({ error: 'settings object required' }, { status: 400 });
     }
+
+    const keys = Object.keys(entries);
+    const pricingOnly = keys.length > 0 && keys.every((key) => key === 'store_pricing') && !Array.isArray(body.modules);
+    const gate = await allow(request, pricingOnly ? 'sales.manage' : 'settings.manage');
+    if (gate.denied) return gate.denied;
 
     for (const [key, value] of Object.entries(entries)) {
       await queryOne(
@@ -97,6 +99,11 @@ export async function PUT(request: Request) {
         );
       }
     }
+
+    await noteAction(request, gate.auth.user?.id, 'settings.update', 'settings', null, {
+      keys,
+      modules: Array.isArray(body.modules),
+    });
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {

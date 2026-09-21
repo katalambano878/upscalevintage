@@ -47,6 +47,8 @@ export async function createOrderFromCheckout(input: {
   shippingCost?: number;
   tax?: number;
   couponCode?: string | null;
+  channel?: 'online' | 'pos';
+  placedBy?: string | null;
 }) {
   const shippingCost = Math.max(0, Number(input.shippingCost) || 0);
   const tax = Math.max(0, Number(input.tax) || 0);
@@ -137,17 +139,20 @@ export async function createOrderFromCheckout(input: {
 
   const checkoutTotal = Math.max(0, computedSubtotal + shippingFinal + tax - discountTotal);
   const plan = computePaymentPlan(checkoutTotal, paymentOption);
+  const channel = input.channel === 'pos' ? 'pos' : 'online';
 
   return transaction(async (client) => {
     const orderResult = await client.query(
       `INSERT INTO orders (
         order_number, user_id, email, phone, status, payment_status, currency,
         subtotal, tax_total, shipping_total, discount_total, total,
-        shipping_method, payment_method, shipping_address, billing_address, metadata
+        shipping_method, payment_method, shipping_address, billing_address, metadata,
+        channel, placed_by
       ) VALUES (
         $1, $2::uuid, $3, $4, 'pending'::order_status, 'pending'::payment_status, 'GHS',
         $5, $6, $7, $14, $8,
-        $9, $10, $11::jsonb, $12::jsonb, $13::jsonb
+        $9, $10, $11::jsonb, $12::jsonb, $13::jsonb,
+        $15, $16::uuid
       ) RETURNING *`,
       [
         input.orderNumber,
@@ -174,9 +179,14 @@ export async function createOrderFromCheckout(input: {
           balance_due: plan.option === 'half' ? plan.balanceDue : 0,
           due_now: plan.dueNow,
           balance_due_before: 'pickup_or_delivery',
+          channel,
+          pos_sale: channel === 'pos',
+          sold_by: input.placedBy || null,
           ...couponMeta,
         }),
         discountTotal,
+        channel,
+        input.placedBy || null,
       ]
     );
 
@@ -232,6 +242,8 @@ export async function listOrdersForUser(userId: string) {
 export async function listOrdersAdmin() {
   const result = await query(
     `SELECT o.*,
+      (SELECT full_name FROM profiles WHERE id = o.placed_by) AS placed_by_name,
+      (SELECT email FROM users WHERE id = o.placed_by) AS placed_by_email,
       COALESCE(
         (SELECT jsonb_agg(jsonb_build_object(
           'id', oi.id,
@@ -255,6 +267,8 @@ export async function listOrdersAdmin() {
 export async function getOrderById(id: string, userId?: string | null, isStaff?: boolean) {
   const row = await queryOne(
     `SELECT o.*,
+      (SELECT full_name FROM profiles WHERE id = o.placed_by) AS placed_by_name,
+      (SELECT email FROM users WHERE id = o.placed_by) AS placed_by_email,
       COALESCE(
         (SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.created_at)
          FROM order_items oi WHERE oi.order_id = o.id),

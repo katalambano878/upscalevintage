@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { allow } from '@/lib/staff-gate';
 import { slugifyProduct } from '@/lib/product-seo';
 
 export async function GET(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, ['products.manage', 'inventory.manage']);
+  if (gate.denied) return gate.denied;
 
   const url = new URL(request.url);
   const raw = url.searchParams.get('slug') || '';

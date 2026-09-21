@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { verifyAuth } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
+import { allow } from '@/lib/staff-gate';
 import {
   applySafeReconciliation,
   checkOrderAgainstGateway,
@@ -9,10 +10,8 @@ import {
 } from '@/lib/payment/reconcile';
 
 export async function GET(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated || !auth.user) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'payments.view');
+  if (gate.denied) return gate.denied;
 
   try {
     const url = new URL(request.url);
@@ -43,10 +42,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated || !auth.user) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'payments.view');
+  if (gate.denied) return gate.denied;
+  const auth = gate.auth;
 
   try {
     const body = await request.json();

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
+import { allow } from '@/lib/staff-gate';
 import { syncProductMedia } from '@/lib/data/catalog-sync';
 import { ensureUniqueProductSlug } from '@/lib/unique-product-slug';
 
@@ -43,10 +44,9 @@ export async function GET(_request: Request, context: Ctx) {
 }
 
 export async function PATCH(request: Request, context: Ctx) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, ['products.manage', 'inventory.manage']);
+  if (gate.denied) return gate.denied;
+  const auth = gate.auth;
 
   const { id } = await context.params;
   const body = await request.json();
@@ -133,6 +133,10 @@ export async function PATCH(request: Request, context: Ctx) {
     if (!updated) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+    await noteAction(request, auth.user?.id, 'product.update', 'product', id, {
+      name: updated.name,
+    });
+
     return NextResponse.json(updated);
   } catch (err: unknown) {
     const code = (err as { code?: string }).code;
@@ -145,10 +149,8 @@ export async function PATCH(request: Request, context: Ctx) {
 }
 
 export async function DELETE(request: Request, context: Ctx) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'products.manage');
+  if (gate.denied) return gate.denied;
 
   const { id } = await context.params;
   try {
@@ -163,6 +165,8 @@ export async function DELETE(request: Request, context: Ctx) {
     if (!result.length) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+    await noteAction(request, gate.auth.user?.id, 'product.delete', 'product', id);
+
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Delete failed';

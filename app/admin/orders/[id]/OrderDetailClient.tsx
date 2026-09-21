@@ -12,6 +12,7 @@ import {
   pickupLocation,
   resolveDeliveryMethod,
 } from '@/lib/delivery';
+import { orderChannel, orderChannelLabel } from '@/lib/order-channel';
 
 interface OrderDetailClientProps {
   orderId: string;
@@ -325,8 +326,22 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               <i className="ri-arrow-left-line text-2xl"></i>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{order?.order_number}</h1>
-              <p className="text-sm text-gray-600">Order placed on {order ? new Date(order.created_at).toLocaleDateString() : ''}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-bold text-gray-900">{order?.order_number}</h1>
+                {order && (
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    orderChannel(order) === 'pos' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'
+                  }`}>
+                    {orderChannelLabel(orderChannel(order))}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-600">
+                Order placed on {order ? new Date(order.created_at).toLocaleDateString() : ''}
+                {order && orderChannel(order) === 'pos' && (order.placed_by_name || order.placed_by_email)
+                  ? ` · Sold by ${order.placed_by_name || order.placed_by_email}`
+                  : ''}
+              </p>
             </div>
           </div>
           <button

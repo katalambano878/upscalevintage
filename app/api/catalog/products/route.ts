@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
+import { canAny } from '@/lib/permissions';
+import { allow } from '@/lib/staff-gate';
 import { syncProductMedia } from '@/lib/data/catalog-sync';
 import { PRODUCT_VARIANTS_JSON_SQL } from '@/lib/product-variants';
 import { ensureUniqueProductSlug } from '@/lib/unique-product-slug';
@@ -23,11 +25,12 @@ export async function GET(request: Request) {
   const sort = searchParams.get('sort') || 'newest';
   const search = searchParams.get('q')?.trim();
 
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  const isStaff = auth.authenticated && (auth.role === 'admin' || auth.role === 'staff');
+  const auth = await allow(request, ['products.manage', 'inventory.manage', 'sales.manage', 'pos.use', 'orders.view']);
+  const isStaff = !auth.denied && (auth.auth.role === 'admin' || auth.auth.role === 'staff');
+  const canSeeFullCatalog = Boolean(auth.auth.user && canAny(auth.auth.user, ['products.manage', 'inventory.manage', 'sales.manage']));
 
-  if (status && status !== 'active' && !isStaff) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (status && status !== 'active' && !canSeeFullCatalog) {
+    return NextResponse.json({ error: isStaff ? 'You do not have permission to do that.' : 'Unauthorized' }, { status: isStaff ? 403 : 401 });
   }
 
   const params: unknown[] = [];
@@ -72,10 +75,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'products.manage');
+  if (gate.denied) return gate.denied;
+  const auth = gate.auth;
 
   try {
     const body = await request.json();
@@ -155,6 +157,10 @@ export async function POST(request: Request) {
     if (body.images || body.variants) {
       await syncProductMedia(created.id as string, body.images, body.variants);
     }
+
+    await noteAction(request, auth.user?.id, 'product.create', 'product', String(created.id), {
+      name: created.name,
+    });
 
     return NextResponse.json(created, { status: 201 });
   } catch (err: unknown) {

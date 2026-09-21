@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
+import { allow } from '@/lib/staff-gate';
 
 export async function GET(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'reviews.manage');
+  if (gate.denied) return gate.denied;
 
   try {
     const status = new URL(request.url).searchParams.get('status') || 'pending';
@@ -36,10 +35,8 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'reviews.manage');
+  if (gate.denied) return gate.denied;
 
   try {
     const { id, status } = await request.json();
@@ -51,6 +48,7 @@ export async function PATCH(request: Request) {
       `UPDATE reviews SET status = $2::review_status, updated_at = now() WHERE id = $1::uuid RETURNING *`,
       [id, status]
     );
+    await noteAction(request, gate.auth.user?.id, 'review.update', 'review', String(id), { status });
     return NextResponse.json(updated);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Update failed';

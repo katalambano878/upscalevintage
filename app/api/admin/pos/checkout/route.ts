@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
 import { createOrderFromCheckout } from '@/lib/data/orders';
 import { sendAndMarkOrderConfirmation } from '@/lib/notifications';
+import { allow } from '@/lib/staff-gate';
 
 /** In-store POS checkout (cash / card / immediate paid). */
 export async function POST(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'pos.use');
+  if (gate.denied) return gate.denied;
+  const auth = gate.auth;
 
   try {
     const body = await request.json();
@@ -37,6 +37,8 @@ export async function POST(request: Request) {
       cart,
       shippingCost: 0,
       tax: 0,
+      channel: 'pos',
+      placedBy: auth.user?.id || null,
     });
 
     if (markPaid) {
@@ -55,6 +57,11 @@ export async function POST(request: Request) {
     }
 
     const paid = await queryOne(`SELECT * FROM orders WHERE id = $1::uuid`, [order.id]);
+    await noteAction(request, auth.user?.id, 'pos.sale', 'order', order.id, {
+      order_number: order.order_number,
+      total: order.total,
+      payment_method: paymentMethod,
+    });
     if (markPaid) {
       await sendAndMarkOrderConfirmation((paid || order) as Record<string, unknown>);
     }

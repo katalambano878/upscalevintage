@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifyAuth } from '@/lib/auth';
+import { allow } from '@/lib/staff-gate';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
 import { query } from '@/lib/db';
 import { extractFromZip } from '@/lib/import/zip-extractor';
@@ -22,10 +22,9 @@ function sseMessage(event: string, data: object): string {
 }
 
 export async function POST(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated || !auth.user) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'products.manage');
+  if (gate.denied) return gate.denied;
+  const auth = gate.auth;
 
   const rateLimitKey = `import:${auth.user.id}`;
   const rateLimitResult = checkRateLimit(rateLimitKey, RATE_LIMITS.productImport);

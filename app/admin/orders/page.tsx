@@ -6,6 +6,7 @@ import { apiData } from '@/lib/client/api';
 import { asNumber, money } from '@/lib/format-money';
 import { formatDeliveryMethod, resolveDeliveryMethod } from '@/lib/delivery';
 import ProductSalesStats from './ProductSalesStats';
+import { orderChannel, orderChannelLabel } from '@/lib/order-channel';
 
 interface Order {
   id: string;
@@ -20,6 +21,8 @@ interface Order {
   phone?: string;
   shipping_address?: any;
   metadata?: any;
+  channel?: string | null;
+  placed_by_name?: string | null;
   profiles?: {
     full_name: string;
     email: string;
@@ -58,6 +61,7 @@ export default function AdminOrdersPage() {
   const [confirmedCount, setConfirmedCount] = useState(0);
   const [showProductStats, setShowProductStats] = useState(false);
   const [productFilter, setProductFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'online' | 'pos'>('all');
   const [availableProducts, setAvailableProducts] = useState<string[]>([]);
 
   useEffect(() => {
@@ -224,8 +228,8 @@ export default function AdminOrdersPage() {
       }
     } else if (action === 'Export') {
       const ordersToExport = orders.filter(o => selectedOrders.includes(o.id));
-      const csvContent = `Order ID,Customer,Email,Date,Items,Total,Status,Payment\n${ordersToExport.map(o =>
-        `${o.order_number || o.id},${getCustomerName(o)},${getCustomerEmail(o)},${formatDate(o.created_at)},${getItemCount(o)},${o.total},${o.status},${o.payment_method || 'N/A'}`
+      const csvContent = `Order ID,Source,Customer,Email,Date,Items,Total,Status,Payment\n${ordersToExport.map(o =>
+        `${o.order_number || o.id},${orderChannelLabel(orderChannel(o))},${getCustomerName(o)},${getCustomerEmail(o)},${formatDate(o.created_at)},${getItemCount(o)},${o.total},${o.status},${o.payment_method || 'N/A'}`
       ).join('\n')}`;
       const blob = new Blob([csvContent], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
@@ -240,8 +244,8 @@ export default function AdminOrdersPage() {
   };
 
   const handleExportAll = () => {
-    const csvContent = `Order ID,Customer,Email,Date,Items,Total,Status,Payment\n${orders.map(o =>
-      `${o.order_number || o.id},${getCustomerName(o)},${getCustomerEmail(o)},${formatDate(o.created_at)},${getItemCount(o)},${o.total},${o.status},${o.payment_method || 'N/A'}`
+    const csvContent = `Order ID,Source,Customer,Email,Date,Items,Total,Status,Payment\n${orders.map(o =>
+      `${o.order_number || o.id},${orderChannelLabel(orderChannel(o))},${getCustomerName(o)},${getCustomerEmail(o)},${formatDate(o.created_at)},${getItemCount(o)},${o.total},${o.status},${o.payment_method || 'N/A'}`
     ).join('\n')}`;
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -297,7 +301,8 @@ export default function AdminOrdersPage() {
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     const matchesProduct = productFilter === 'all' || 
       order.order_items?.some((item: any) => item.product_name === productFilter);
-    return matchesViewTab && matchesSearch && matchesStatus && matchesProduct;
+    const matchesSource = sourceFilter === 'all' || orderChannel(order) === sourceFilter;
+    return matchesViewTab && matchesSearch && matchesStatus && matchesProduct && matchesSource;
   });
 
   return (
@@ -305,7 +310,7 @@ export default function AdminOrdersPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Orders</h1>
-          <p className="text-gray-600 mt-1">Manage and track all customer orders</p>
+          <p className="text-gray-600 mt-1">Website orders and in-store till sales stay separate.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
           <button
@@ -349,6 +354,27 @@ export default function AdminOrdersPage() {
           <i className="ri-shopping-cart-2-line mr-2"></i>
           Abandoned Carts ({abandonedCount})
         </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {([
+          ['all', 'All sources'],
+          ['online', 'Online'],
+          ['pos', 'In store'],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setSourceFilter(value)}
+            className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+              sourceFilter === value
+                ? 'border-gray-900 bg-gray-900 text-white'
+                : 'border-gray-300 bg-white text-gray-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {orderViewTab === 'confirmed' && (
@@ -541,9 +567,19 @@ export default function AdminOrdersPage() {
                       <Link href={`/admin/orders/${order.id}`} className="text-store-ink hover:text-store-ink font-semibold whitespace-nowrap cursor-pointer">
                         {order.order_number || order.id.substring(0, 8)}
                       </Link>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {formatDeliveryMethod(resolveDeliveryMethod(order))}
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                          orderChannel(order) === 'pos' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {orderChannelLabel(orderChannel(order))}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {formatDeliveryMethod(resolveDeliveryMethod(order))}
+                        </span>
+                      </div>
+                      {orderChannel(order) === 'pos' && order.placed_by_name && (
+                        <p className="mt-1 text-xs text-gray-500">Sold by {order.placed_by_name}</p>
+                      )}
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center space-x-3">

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { transaction } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
+import { allow } from '@/lib/staff-gate';
 
 const MAX_PRODUCTS = 500;
 
@@ -10,10 +11,9 @@ function productIds(value: unknown) {
 }
 
 export async function POST(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'sales.manage');
+  if (gate.denied) return gate.denied;
+  const auth = gate.auth;
 
   const body = await request.json().catch(() => null);
   const action = body?.action;
@@ -70,6 +70,11 @@ export async function POST(request: Request) {
         [ids, percent]
       );
       return products.rowCount ?? 0;
+    });
+
+    await noteAction(request, auth.user?.id, action === 'clear' ? 'sale.clear' : 'sale.apply', 'product', null, {
+      count: updated,
+      percent: action === 'apply' ? percent : undefined,
     });
 
     return NextResponse.json({ updated });

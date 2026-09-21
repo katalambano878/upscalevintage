@@ -29,6 +29,7 @@ export async function createUser(input: {
     fullName?: string | null;
     phone?: string | null;
     role?: 'admin' | 'staff' | 'customer';
+    permissions?: string[] | null;
 }): Promise<UserRecord> {
     const email = normaliseEmail(input.email);
     const passwordHash = await hashPassword(input.password);
@@ -51,9 +52,16 @@ export async function createUser(input: {
             `UPDATE profiles
                 SET full_name = COALESCE($2, full_name),
                     phone     = COALESCE($3, phone),
-                    role      = COALESCE($4::user_role, role)
+                    role      = COALESCE($4::user_role, role),
+                    permissions = COALESCE($5::jsonb, permissions)
               WHERE id = $1`,
-            [userId, input.fullName ?? null, input.phone ?? null, input.role ?? null]
+            [
+                userId,
+                input.fullName ?? null,
+                input.phone ?? null,
+                input.role ?? null,
+                input.permissions ? JSON.stringify(input.permissions) : null,
+            ]
         );
 
         return { id: userId, email, role: input.role ?? 'customer' };

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
+import { noteAction } from '@/lib/audit';
 import { verifyAuth } from '@/lib/auth';
+import { allow } from '@/lib/staff-gate';
 import { listCategories } from '@/lib/data/products';
 
 export async function GET(request: Request) {
@@ -16,10 +18,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'categories.manage');
+  if (gate.denied) return gate.denied;
 
   const body = await request.json();
   const { name, slug, description, image_url, status = 'active', position = 0, metadata = {}, parent_id } = body;
@@ -53,6 +53,9 @@ export async function POST(request: Request) {
         parent,
       ]
     );
+    await noteAction(request, gate.auth.user?.id, 'category.create', 'category', created?.id, {
+      name: categoryName,
+    });
     return NextResponse.json(created, { status: 201 });
   } catch (err: unknown) {
     const code = (err as { code?: string }).code;

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiData } from '@/lib/client/api';
 import { money } from '@/lib/format-money';
+import { orderChannel, orderChannelLabel } from '@/lib/order-channel';
 
 type DayOrder = {
   id: string;
@@ -11,6 +12,8 @@ type DayOrder = {
   status: string;
   payment_status: string;
   payment_method: string | null;
+  channel?: string | null;
+  placed_by_name?: string | null;
   total: number;
   created_at: string;
 };
@@ -78,8 +81,16 @@ export default function EndOfDayPage() {
       const current = byMethod.get(key) || { count: 0, total: 0 };
       byMethod.set(key, { count: current.count + 1, total: current.total + Number(order.total) });
     }
+    const paidTotalFor = (channel: 'online' | 'pos') =>
+      paid
+        .filter((order) => orderChannel(order) === channel)
+        .reduce((sum, order) => sum + Number(order.total), 0);
     return {
       orders: orders.length,
+      onlineCount: orders.filter((order) => orderChannel(order) === 'online').length,
+      posCount: orders.filter((order) => orderChannel(order) === 'pos').length,
+      onlinePaid: paidTotalFor('online'),
+      posPaid: paidTotalFor('pos'),
       paidCount: paid.length,
       paidTotal: paid.reduce((sum, order) => sum + Number(order.total), 0),
       unpaidTotal: orders
@@ -142,6 +153,16 @@ export default function EndOfDayPage() {
           <p className="mb-1 text-sm text-gray-600">Items sold</p>
           <p className="text-2xl font-bold text-gray-900">{loading ? '—' : report?.item_count ?? 0}</p>
         </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="mb-1 text-sm text-gray-600">Online paid</p>
+          <p className="text-2xl font-bold text-gray-900">{loading ? '—' : `GH₵${money(totals.onlinePaid)}`}</p>
+          <p className="mt-1 text-xs text-gray-500">{loading ? '' : `${totals.onlineCount} orders`}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="mb-1 text-sm text-gray-600">In store paid</p>
+          <p className="text-2xl font-bold text-gray-900">{loading ? '—' : `GH₵${money(totals.posPaid)}`}</p>
+          <p className="mt-1 text-xs text-gray-500">{loading ? '' : `${totals.posCount} orders`}</p>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -154,6 +175,7 @@ export default function EndOfDayPage() {
               <thead className="border-b border-gray-200 bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Order</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Source</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Payment</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Total</th>
@@ -162,7 +184,7 @@ export default function EndOfDayPage() {
               <tbody>
                 {!loading && totals.orders === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-gray-500">
+                    <td colSpan={5} className="p-8 text-center text-gray-500">
                       No orders for this day.
                     </td>
                   </tr>
@@ -173,7 +195,11 @@ export default function EndOfDayPage() {
                         <p className="font-medium text-gray-900">{order.order_number}</p>
                         <p className="text-xs text-gray-500">
                           {formatTime(order.created_at)} · {order.email}
+                          {order.placed_by_name ? ` · ${order.placed_by_name}` : ''}
                         </p>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-gray-700">
+                        {orderChannelLabel(orderChannel(order))}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700">
                         {order.payment_method || '—'}

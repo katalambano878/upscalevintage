@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { allow } from '@/lib/staff-gate';
 
 type OrderStats = {
   orders: number;
@@ -52,10 +52,8 @@ function mergeStats(
 }
 
 export async function GET(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'customers.view');
+  if (gate.denied) return gate.denied;
 
   const { searchParams } = new URL(request.url);
   const limit = Math.min(parseInt(searchParams.get('limit') || '100', 10) || 100, 500);

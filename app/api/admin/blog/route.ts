@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
+import { allow } from '@/lib/staff-gate';
 import { slugifyProduct } from '@/lib/product-seo';
 
 export async function GET(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'blog.manage');
+  if (gate.denied) return gate.denied;
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status');
@@ -34,10 +33,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'blog.manage');
+  if (gate.denied) return gate.denied;
+  const auth = gate.auth;
 
   try {
     const body = await request.json();
@@ -88,6 +86,7 @@ export async function POST(request: Request) {
       ]
     );
 
+    await noteAction(request, auth.user?.id, 'blog.create', 'blog', created?.id, { title });
     return NextResponse.json(created, { status: 201 });
   } catch (err: unknown) {
     console.error('[admin/blog POST]', err);

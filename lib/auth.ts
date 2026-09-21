@@ -2,6 +2,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { randomUUID } from 'node:crypto';
 import { query, queryOne } from './db';
+import { parsePermissionList } from './permissions';
 import {
     SESSION_COOKIE,
     SESSION_TTL_DAYS,
@@ -20,6 +21,7 @@ export interface AuthUser {
     phone: string | null;
     avatarUrl: string | null;
     emailVerified: boolean;
+    permissions: string[];
 }
 
 interface SessionRow {
@@ -31,6 +33,7 @@ interface SessionRow {
     avatar_url: string | null;
     email_verified_at: Date | null;
     disabled_at: Date | null;
+    permissions: unknown;
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
@@ -46,7 +49,8 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
                 p.role,
                 p.full_name,
                 p.phone,
-                p.avatar_url
+                p.avatar_url,
+                p.permissions
            FROM sessions s
            JOIN users u    ON u.id = s.user_id
            JOIN profiles p ON p.id = s.user_id
@@ -66,6 +70,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
         phone: row.phone,
         avatarUrl: row.avatar_url,
         emailVerified: row.email_verified_at !== null,
+        permissions: parsePermissionList(row.permissions),
     };
 }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
+import { allow } from '@/lib/staff-gate';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -18,6 +19,8 @@ type OrderRow = {
   status: string;
   payment_status: string;
   payment_method: string | null;
+  channel: string | null;
+  placed_by_name: string | null;
   total: number;
   created_at: string;
 };
@@ -44,10 +47,8 @@ async function loadCloses() {
 }
 
 export async function GET(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'end_of_day');
+  if (gate.denied) return gate.denied;
 
   const date = new URL(request.url).searchParams.get('date');
   if (!isDate(date)) {
@@ -58,13 +59,15 @@ export async function GET(request: Request) {
 
   try {
     const orders = await query<OrderRow>(
-      `SELECT id, order_number, email, status::text AS status, payment_status::text AS payment_status,
-              payment_method, total, created_at
-         FROM orders
-        WHERE created_at >= $1::timestamptz
-          AND created_at < $2::timestamptz
-          AND status::text <> 'cancelled'
-        ORDER BY created_at DESC`,
+      `SELECT o.id, o.order_number, o.email, o.status::text AS status, o.payment_status::text AS payment_status,
+              o.payment_method, o.channel, o.total, o.created_at,
+              p.full_name AS placed_by_name
+         FROM orders o
+         LEFT JOIN profiles p ON p.id = o.placed_by
+        WHERE o.created_at >= $1::timestamptz
+          AND o.created_at < $2::timestamptz
+          AND o.status::text <> 'cancelled'
+        ORDER BY o.created_at DESC`,
       [start, end]
     );
 
@@ -94,10 +97,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'end_of_day');
+  if (gate.denied) return gate.denied;
+  const auth = gate.auth;
 
   const body = await request.json().catch(() => null);
   const date = typeof body?.date === 'string' ? body.date : '';
@@ -137,6 +139,12 @@ export async function POST(request: Request) {
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       [JSON.stringify({ closes: next })]
     );
+
+    await noteAction(request, auth.user?.id, 'day.close', 'report', null, {
+      date,
+      order_count: nextClose.order_count,
+      paid_total: nextClose.paid_total,
+    });
 
     return NextResponse.json({ close: nextClose });
   } catch (err: unknown) {

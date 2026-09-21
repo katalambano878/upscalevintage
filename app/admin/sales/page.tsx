@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiData } from '@/lib/client/api';
+import { accessFor } from '@/lib/permissions';
 import { asNumber, money } from '@/lib/format-money';
 import { parseStorePricingValue } from '@/lib/pricing';
 
@@ -38,8 +39,8 @@ export default function AdminSalesPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const me = await apiData<{ user: { role: string } | null }>('/api/auth/me');
-      setIsAdmin(me.user?.role === 'admin');
+      const me = await apiData<{ user: { role: string; permissions?: string[] } | null }>('/api/auth/me');
+      setIsAdmin(accessFor(me.user?.role, me.user?.permissions).includes('sales.manage'));
 
       const [settingsRes, catalog] = await Promise.all([
         apiData<{ settings: { store_pricing?: unknown } }>('/api/settings?keys=store_pricing'),
@@ -266,7 +267,7 @@ export default function AdminSalesPage() {
           </button>
         </div>
         {!isAdmin && (
-          <p className="text-xs text-amber-700 mt-4">Only admins can change this setting.</p>
+          <p className="text-xs text-amber-700 mt-4">You do not have permission to change sale pricing.</p>
         )}
       </div>
 

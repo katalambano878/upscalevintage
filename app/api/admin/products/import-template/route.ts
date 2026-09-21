@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifyAuth } from '@/lib/auth';
+import { allow } from '@/lib/staff-gate';
 
 const SAMPLE_CSV = `name,description,category,price,compare_at_price,quantity,moq,status,featured,seo_title,seo_description,keywords,low_stock_threshold,preorder_shipping,images,variant_color,variant_color_hex,variant_size,variant_price,variant_stock
 "Wireless Bluetooth Earbuds","Premium wireless Bluetooth 5.3 earbuds with ANC and 30hr battery.","Electronics",89.99,120.00,150,1,"Active",true,"Wireless Bluetooth Earbuds","Shop premium wireless earbuds.","earbuds,bluetooth,wireless",5,,"earbuds-white.jpg;earbuds-case.jpg",,,,,,
@@ -9,10 +9,8 @@ const SAMPLE_CSV = `name,description,category,price,compare_at_price,quantity,mo
 `;
 
 export async function GET(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'products.manage');
+  if (gate.denied) return gate.denied;
 
   return new NextResponse(SAMPLE_CSV, {
     headers: {

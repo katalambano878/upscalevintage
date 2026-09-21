@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
+import { allow } from '@/lib/staff-gate';
 
 const DISCOUNT_TYPES = ['percentage', 'fixed_amount', 'free_shipping'] as const;
 type DiscountType = (typeof DISCOUNT_TYPES)[number];
@@ -23,10 +24,8 @@ const PATCH_FIELDS = [
 ] as const;
 
 export async function PATCH(request: Request, context: Ctx) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, 'coupons.manage');
+  if (gate.denied) return gate.denied;
 
   const { id } = await context.params;
   const body = await request.json();
@@ -99,11 +98,9 @@ export async function PATCH(request: Request, context: Ctx) {
   }
 }
 
-export async function DELETE(_request: Request, context: Ctx) {
-  const auth = await verifyAuth(_request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function DELETE(request: Request, context: Ctx) {
+  const gate = await allow(request, 'coupons.manage');
+  if (gate.denied) return gate.denied;
 
   const { id } = await context.params;
 
@@ -112,10 +109,11 @@ export async function DELETE(_request: Request, context: Ctx) {
     if (!result.length) {
       return NextResponse.json({ error: 'Coupon not found' }, { status: 404 });
     }
+    await noteAction(request, gate.auth.user?.id, 'coupon.delete', 'coupon', id);
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     console.error('[admin/coupons DELETE]', err);
     return NextResponse.json({ error: 'Delete failed' }, { status: 500 });
   }
 }
-
+

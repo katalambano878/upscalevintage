@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { queryOne, query } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { allow } from '@/lib/staff-gate';
+import type { PermissionKey } from '@/lib/permissions';
 import { escapeHtml } from '@/lib/sanitize';
 import {
   sendOrderConfirmation,
@@ -41,17 +42,17 @@ export async function POST(request: Request) {
 
     const adminOnlyTypes = ['campaign', 'order_updated', 'order_status', 'payment_link', 'welcome', 'order_created'];
     if (adminOnlyTypes.includes(type)) {
-      const auth = await verifyAuth(request, { requireAdmin: true });
-      if (!auth.authenticated) {
-        return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-      }
+      const permission: PermissionKey | PermissionKey[] =
+        type === 'campaign' || type === 'welcome'
+          ? 'notifications.send'
+          : type === 'order_created'
+            ? ['pos.use', 'orders.update']
+            : 'orders.update';
+      const gate = await allow(request, permission);
+      if (gate.denied) return gate.denied;
     }
 
     if (type === 'order_created') {
-      const auth = await verifyAuth(request, { requireAdmin: true });
-      if (!auth.authenticated) {
-        return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-      }
 
       if (!payload.order_number && !payload.id) {
         return NextResponse.json({ error: 'Missing order identifier' }, { status: 400 });

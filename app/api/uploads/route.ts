@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
-import { verifyAuth } from '@/lib/auth';
+import { noteAction } from '@/lib/audit';
+import { allow } from '@/lib/staff-gate';
 import { compressImageBuffer } from '@/lib/image-compress';
 
 export const runtime = 'nodejs';
@@ -38,10 +39,8 @@ function extFor(contentType: string, originalName: string) {
 }
 
 export async function POST(request: Request) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await allow(request, ['products.manage', 'categories.manage', 'blog.manage']);
+  if (gate.denied) return gate.denied;
 
   try {
     const form = await request.formData();

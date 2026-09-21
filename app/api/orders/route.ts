@@ -1,5 +1,6 @@
 import { fail, ok, route } from '@/lib/api';
 import { getUserIdFromRequest, isStaffRole, verifyAuth } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import {
     createOrderFromCheckout,
     listOrdersAdmin,
@@ -15,6 +16,9 @@ export const GET = route(async (request) => {
     const userId = await getUserIdFromRequest(request);
 
     if (auth.authenticated && auth.user && isStaffRole(auth.role || auth.user.role)) {
+        if (!can(auth.user, 'orders.view')) {
+            return fail('You do not have permission to do that.', 403, 'forbidden');
+        }
         return ok(await listOrdersAdmin());
     }
 
