@@ -74,7 +74,7 @@ export const NAV_LINKS_OPTIONAL = [
 export const FOOTER_TAGLINE = 'Good things. A brighter you.';
 
 /** Homepage hero — editorial lifestyle (bust cache when images change) */
-export const HERO_IMAGE_VERSION = '20260921h';
+export const HERO_IMAGE_VERSION = '20260923a';
 export const HERO_IMAGES = [
   '/hero/hero-home-1.jpg',
   '/hero/hero-home-2.jpg',
@@ -84,7 +84,7 @@ export const HERO_IMAGES = [
 /** Generated page heroes — no people, black/white/gold boutique aesthetic */
 export const PAGE_HERO_IMAGES = {
   categories: '/hero/hero-categories.png',
-  shop: '/hero/hero-shop.png',
+  shop: '/hero/hero-shop.jpg',
   blog: '/hero/hero-blog.png',
   about: '/hero/hero-about.png',
   contact: '/hero/hero-contact.png',

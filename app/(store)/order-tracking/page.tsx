@@ -159,7 +159,7 @@ function OrderTrackingContent() {
           eyebrow="Orders"
           title="Track your order"
           subtitle="Enter the order number and the email used at checkout."
-          image={PAGE_HERO_IMAGES.shop}
+          image={PAGE_HERO_IMAGES.cart}
         />
 
         <section className="mx-auto max-w-xl px-4 py-14 sm:px-6 md:py-16">
@@ -225,7 +225,7 @@ function OrderTrackingContent() {
         eyebrow="Orders"
         title={order.order_number}
         subtitle={pickup ? `${deliveryLabel} · Ready in 24 hours` : `${deliveryLabel} · Estimated ${estimatedDelivery}`}
-        image={PAGE_HERO_IMAGES.shop}
+        image={PAGE_HERO_IMAGES.cart}
       />
 
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-6 md:py-16">

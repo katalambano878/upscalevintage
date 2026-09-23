@@ -190,7 +190,7 @@ function ShopContent() {
         <img
           src={`${PAGE_HERO_IMAGES.shop}?v=${HERO_IMAGE_VERSION}`}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover object-[70%_center]"
+          className="absolute inset-0 h-full w-full object-cover object-center"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/35 to-transparent" />
         <div className="relative z-10 mx-auto w-full max-w-[1440px] px-4 py-10 sm:px-6 lg:px-10">

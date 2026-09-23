@@ -109,7 +109,7 @@ export default function ShippingPage() {
         eyebrow="Delivery"
         title="Shipping across Ghana"
         subtitle="Standard, express, and store pickup. Free standard delivery on orders over GH₵300."
-        image={PAGE_HERO_IMAGES.shop}
+        image={PAGE_HERO_IMAGES.cart}
       />
 
       <section className="mx-auto max-w-[1400px] px-4 py-14 sm:px-6 lg:px-10 md:py-16">
