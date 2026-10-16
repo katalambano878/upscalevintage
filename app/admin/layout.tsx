@@ -227,6 +227,11 @@ export default function AdminLayout({
       path: '/admin/test-sms',
       permission: 'notifications.send'
     },
+    {
+      title: 'Buy SMS',
+      icon: 'ri-bank-card-line',
+      path: '/admin/sms-credit'
+    },
 
     {
       title: 'Blog',
