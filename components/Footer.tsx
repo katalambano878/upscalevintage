@@ -148,6 +148,10 @@ export default function Footer() {
           <p>
             &copy; {new Date().getFullYear()} {siteName}
           </p>
+          <p>
+            Powered by{' '}
+            <a href="https://doctorbarns.com" target="_blank" rel="noopener" className="transition-colors duration-150 hover:text-brand-champagne hover:underline">Doctor Barns Tech</a>
+          </p>
         </div>
       </div>
     </footer>
