@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
 import { accessFor, permissionForPath, type PermissionKey } from '@/lib/permissions';
+import { SmsCreditDashboardCard } from '@/components/admin/SmsCreditDashboardCard';
 
 export default function AdminLayout({
   children,
