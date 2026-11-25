@@ -407,6 +407,7 @@ export default function AdminLayout({
           </div>
         </header>
 
+        <SmsCreditDashboardCard />
         <main className="p-4 lg:p-6">
           {requiredPermission && !canOpen(requiredPermission) ? (
             <div className="max-w-lg rounded-xl border border-gray-200 bg-white p-8">
