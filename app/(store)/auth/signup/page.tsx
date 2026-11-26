@@ -109,18 +109,6 @@ export default function SignupPage() {
 
       if (error) throw new Error(error);
 
-      fetch('/api/notifications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'welcome',
-          payload: {
-            email: formData.email,
-            firstName: formData.firstName,
-          },
-        }),
-      }).catch((err) => console.error('Welcome notification error:', err));
-
       router.push('/account');
       router.refresh();
     } catch (err: any) {

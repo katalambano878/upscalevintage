@@ -22,7 +22,10 @@ export default function CustomerDetailsPage() {
             if (!profile) throw new Error('Customer not found');
 
             const ordersData = (await apiData<any[]>('/api/orders')).filter(
-              (o) => o.user_id === profile.user_id || o.email === profile.email
+              (o) =>
+                (profile.user_id && o.user_id === profile.user_id) ||
+                (!!profile.email &&
+                  (o.email || '').toLowerCase() === String(profile.email).toLowerCase())
             );
 
             setCustomer(profile);

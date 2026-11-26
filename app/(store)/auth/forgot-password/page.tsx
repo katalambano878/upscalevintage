@@ -35,10 +35,22 @@ export default function ForgotPasswordPage() {
       return;
     }
 
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not send the reset link. Please try again.');
+      }
       setIsSubmitted(true);
-    }, 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send the reset link. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isSubmitted) {
@@ -51,7 +63,7 @@ export default function ForgotPasswordPage() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-3">Check Your Email</h1>
             <p className="text-gray-600 mb-6">
-              We've sent a password reset link to <strong>{email}</strong>
+              If an account exists for <strong>{email}</strong>, we've sent it a link to reset your password. The link works once and expires in an hour.
             </p>
             <p className="text-sm text-gray-500 mb-8">
               If you don't receive an email within a few minutes, please check your spam folder.

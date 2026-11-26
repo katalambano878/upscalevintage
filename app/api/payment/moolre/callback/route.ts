@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { applyCouponUsageForOrder } from '@/lib/coupons';
-import { sendOrderConfirmation } from '@/lib/notifications';
+import { runAfterPayment } from '@/lib/payment/after-payment';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
 import {
   assertCallbackSecretConfigured,
@@ -118,8 +117,6 @@ export async function POST(req: Request) {
       }
 
       const chargedAmount = apiCheck.amount ?? expectedCharge;
-      const prevStatus = existingOrder.payment_status;
-      const wasConfirmed = existingOrder.metadata?.confirmation_sent_at;
 
       if (moolreReference) {
         const prior = await queryOne<{ id: string }>(
@@ -140,40 +137,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, message: 'Database update failed' }, { status: 500 });
       }
 
-      if (
-        (orderJson.payment_status === 'paid' || orderJson.payment_status === 'partially_paid') &&
-        prevStatus !== 'paid' &&
-        prevStatus !== 'partially_paid'
-      ) {
-        try {
-          await applyCouponUsageForOrder(orderJson);
-        } catch (couponErr: unknown) {
-          console.error('[Callback] Coupon usage failed:', couponErr);
-        }
-      }
-
-      if (orderJson.payment_status === 'paid' && orderJson.email && prevStatus !== 'paid') {
-        try {
-          await query(`SELECT update_customer_stats($1, $2)`, [
-            String(orderJson.email),
-            Number(orderJson.total),
-          ]);
-        } catch (statsError: unknown) {
-          console.error('[Callback] Customer stats failed:', statsError);
-        }
-      }
-
-      if (!wasConfirmed && (orderJson.payment_status === 'paid' || orderJson.payment_status === 'partially_paid')) {
-        try {
-          await sendOrderConfirmation(orderJson);
-          await query(
-            `UPDATE orders SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb WHERE order_number = $1`,
-            [merchantOrderRef, JSON.stringify({ confirmation_sent_at: new Date().toISOString() })]
-          );
-        } catch (notifyError: unknown) {
-          console.error('[Callback] Notification failed:', notifyError);
-        }
-      }
+      await runAfterPayment(orderJson, 'Callback');
 
       return NextResponse.json({
         success: true,

@@ -8,30 +8,20 @@ import RefundPolicySection from '@/components/RefundPolicySection';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { REFUND_POLICY } from '@/lib/brand';
 
-const mockOrders = [
-  {
-    id: 'ORD-2024-156',
-    date: '2024-01-20',
-    items: [
-      {
-        id: 1,
-        name: 'Premium Leather Crossbody Bag',
-        price: 289,
-        image:
-          'https://readdy.ai/api/search-image?query=elegant%20premium%20leather%20crossbody%20bag&width=400&height=400&seq=return1&orientation=squarish',
-        returnable: true,
-      },
-      {
-        id: 2,
-        name: 'Minimalist Ceramic Vase Set',
-        price: 159,
-        image:
-          'https://readdy.ai/api/search-image?query=modern%20minimalist%20ceramic%20vase%20set&width=400&height=400&seq=return2&orientation=squarish',
-        returnable: true,
-      },
-    ],
-  },
-];
+type ReturnableItem = {
+  id: string;
+  product_name: string;
+  variant_name: string | null;
+  quantity: number;
+  unit_price: number;
+  image: string | null;
+};
+
+type FoundOrder = {
+  order_number: string;
+  created_at: string;
+  items: ReturnableItem[];
+};
 
 export default function ReturnsPage() {
   usePageTitle('Returns & Refunds');
@@ -39,37 +29,67 @@ export default function ReturnsPage() {
   const [step, setStep] = useState(1);
   const [orderNumber, setOrderNumber] = useState('');
   const [email, setEmail] = useState('');
-  const [selectedItems, setSelectedItems] = useState<number[]>([]);
-  const [returnReasons, setReturnReasons] = useState<Record<number, string>>({});
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [returnReasons, setReturnReasons] = useState<Record<string, string>>({});
+  const [error, setError] = useState('');
   const [returnType, setReturnType] = useState<'refund' | 'exchange'>('refund');
   const [isLoading, setIsLoading] = useState(false);
-  const [foundOrder, setFoundOrder] = useState<(typeof mockOrders)[0] | null>(null);
+  const [foundOrder, setFoundOrder] = useState<FoundOrder | null>(null);
 
   const reasons = [...REFUND_POLICY.refundReasons, 'Other (describe in notes to support)'];
 
-  const handleFindOrder = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setTimeout(() => {
-      setFoundOrder(mockOrders[0]);
-      setIsLoading(false);
-      setStep(2);
-    }, 1000);
+  const callReturns = async (payload: Record<string, unknown>) => {
+    const res = await fetch('/api/returns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderNumber, email, ...payload }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
+    return data;
   };
 
-  const toggleItemSelection = (itemId: number) => {
+  const handleFindOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+    try {
+      const data = await callReturns({ action: 'lookup' });
+      setFoundOrder({ ...data.order, items: data.items || [] });
+      setSelectedItems([]);
+      setReturnReasons({});
+      setStep(2);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not find that order.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleItemSelection = (itemId: string) => {
     setSelectedItems((prev) =>
       prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]
     );
   };
 
-  const handleSubmitReturn = () => {
+  const handleSubmitReturn = async () => {
+    setError('');
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await callReturns({
+        action: 'submit',
+        returnType,
+        items: selectedItems.map((id) => ({ orderItemId: id, reason: returnReasons[id] })),
+      });
       router.push('/returns/confirmation');
-    }, 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send your request.');
+      setIsLoading(false);
+    }
   };
+
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
     <div className="min-h-screen bg-brand-cream">
@@ -130,7 +150,7 @@ export default function ReturnsPage() {
                     value={orderNumber}
                     onChange={(e) => setOrderNumber(e.target.value)}
                     className="w-full px-4 py-3 border border-brand-nude rounded-xl bg-brand-cream text-brand-cocoa focus:ring-2 focus:ring-brand-mauve/40 focus:border-brand-mauve"
-                    placeholder="ORD-2024-156"
+                    placeholder="ORD-1700000000000-123"
                     required
                   />
                 </div>
@@ -145,6 +165,11 @@ export default function ReturnsPage() {
                     required
                   />
                 </div>
+                {error && (
+                  <p role="alert" className="text-sm text-red-600">
+                    {error}
+                  </p>
+                )}
                 <button
                   type="submit"
                   disabled={isLoading}
@@ -170,7 +195,7 @@ export default function ReturnsPage() {
 
               <div className="mb-6 p-4 bg-brand-nude/30 rounded-xl border border-brand-nude">
                 <p className="text-sm font-medium text-brand-cocoa/80">
-                  Order #{foundOrder.id} · Placed on {foundOrder.date}
+                  Order #{foundOrder.order_number} · Placed on {formatDate(foundOrder.created_at)}
                 </p>
               </div>
 
@@ -185,12 +210,18 @@ export default function ReturnsPage() {
                         className="mt-1 w-5 h-5 text-brand-espresso rounded border-brand-nude focus:ring-brand-mauve/40"
                       />
                       <div className="w-20 h-20 shrink-0 bg-brand-nude/40 rounded-lg overflow-hidden">
-                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                        {item.image && (
+                          <img src={item.image} alt={item.product_name} className="w-full h-full object-cover" />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-brand-espresso mb-1">{item.name}</p>
+                        <p className="font-semibold text-brand-espresso mb-1">
+                          {item.product_name}
+                          {item.variant_name ? ` · ${item.variant_name}` : ''}
+                          {item.quantity > 1 ? ` × ${item.quantity}` : ''}
+                        </p>
                         <p className="text-lg font-semibold text-brand-espresso mb-3">
-                          GH₵{item.price.toFixed(2)}
+                          GH₵{Number(item.unit_price).toFixed(2)}
                         </p>
                         {selectedItems.includes(item.id) && (
                           <div className="mt-2">
@@ -289,12 +320,14 @@ export default function ReturnsPage() {
                         className="flex items-center justify-between p-4 bg-brand-nude/25 rounded-xl border border-brand-nude/60"
                       >
                         <div>
-                          <p className="font-semibold text-brand-espresso">{item.name}</p>
+                          <p className="font-semibold text-brand-espresso">{item.product_name}</p>
                           <p className="text-sm text-brand-cocoa/75 font-medium">
                             {returnType === 'exchange' ? 'Exchange' : 'Refund'} · {returnReasons[item.id]}
                           </p>
                         </div>
-                        <p className="font-semibold text-brand-espresso">GH₵{item.price.toFixed(2)}</p>
+                        <p className="font-semibold text-brand-espresso">
+                          GH₵{(Number(item.unit_price) * item.quantity).toFixed(2)}
+                        </p>
                       </div>
                     ))}
                 </div>
@@ -321,6 +354,12 @@ export default function ReturnsPage() {
                   </li>
                 </ol>
               </div>
+
+              {error && (
+                <p role="alert" className="text-sm text-red-600 mb-4">
+                  {error}
+                </p>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-4">
                 <button

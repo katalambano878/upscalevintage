@@ -331,7 +331,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             };
 
             if (isEditMode && productId) {
-                await apiPatch(`/api/catalog/products/${productId}`, payload);
+                await apiData(`/api/catalog/products/${productId}`, { method: 'PATCH', json: payload });
             } else {
                 const created = await apiData<{ id: string }>('/api/catalog/products', {
                     method: 'POST',

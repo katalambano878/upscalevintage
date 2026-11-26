@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
-import { hashPassword } from '@/lib/password';
-import { query } from '@/lib/db';
+import { validatePasswordStrength, verifyPassword } from '@/lib/password';
+import { query, queryOne } from '@/lib/db';
+import { changePassword } from '@/lib/repositories/users';
 
 export async function PATCH(request: Request) {
   const auth = await verifyAuth(request);
@@ -19,14 +20,21 @@ export async function PATCH(request: Request) {
 
   try {
     if (body.password) {
-      if (String(body.password).length < 6) {
-        return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
+      // Changing the password needs the current one, so someone using an
+      // unlocked phone or a stolen session cannot lock the owner out.
+      const row = await queryOne<{ password_hash: string | null }>(
+        `SELECT password_hash FROM users WHERE id = $1::uuid`,
+        [userId]
+      );
+      const current = String(body.current_password || '');
+      if (!row?.password_hash || !current || !(await verifyPassword(current, row.password_hash))) {
+        return NextResponse.json({ error: 'Your current password is not right.' }, { status: 400 });
       }
-      const hashed = await hashPassword(String(body.password));
-      await query(`UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1::uuid`, [
-        userId,
-        hashed,
-      ]);
+      const weak = validatePasswordStrength(String(body.password));
+      if (weak) {
+        return NextResponse.json({ error: weak }, { status: 400 });
+      }
+      await changePassword(userId, String(body.password));
     }
 
     const fullName =
@@ -42,13 +50,18 @@ export async function PATCH(request: Request) {
            phone = COALESCE($3, phone),
            updated_at = now()
          WHERE id = $1::uuid`,
-        [userId, fullName ?? null, body.phone ?? null]
+        // Blank means "leave as is", not "erase".
+        [
+          userId,
+          typeof fullName === 'string' && fullName.trim() ? fullName.trim() : null,
+          typeof body.phone === 'string' && body.phone.trim() ? body.phone.trim() : null,
+        ]
       );
     }
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Update failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[auth/profile]', err);
+    return NextResponse.json({ error: 'Update failed. Please try again.' }, { status: 500 });
   }
 }

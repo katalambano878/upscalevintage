@@ -69,13 +69,22 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const entries = body.settings && typeof body.settings === 'object' ? body.settings : body;
+    // Settings live under `settings`; a body with only `modules` changes no settings.
+    const entries =
+      body.settings && typeof body.settings === 'object'
+        ? body.settings
+        : Array.isArray(body.modules)
+          ? {}
+          : Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'category'));
 
     if (!entries || typeof entries !== 'object' || Array.isArray(entries)) {
       return NextResponse.json({ error: 'settings object required' }, { status: 400 });
     }
 
     const keys = Object.keys(entries);
+    if (!keys.length && !Array.isArray(body.modules)) {
+      return NextResponse.json({ error: 'settings object required' }, { status: 400 });
+    }
     const pricingOnly = keys.length > 0 && keys.every((key) => key === 'store_pricing') && !Array.isArray(body.modules);
     const gate = await allow(request, pricingOnly ? 'sales.manage' : 'settings.manage');
     if (gate.denied) return gate.denied;

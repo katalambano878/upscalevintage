@@ -40,7 +40,14 @@ export default function CustomerInsightsPage() {
       const orders = await apiData<any[]>('/api/orders');
 
       const aggregated = rows.map((profile: any) => {
-        const userOrders = orders?.filter((o) => o.user_id === profile.user_id || o.email === profile.email) || [];
+        const userOrders =
+          orders?.filter(
+            (o) =>
+              (o.payment_status === 'paid' || o.payment_status === 'partially_paid') &&
+              ((profile.user_id && o.user_id === profile.user_id) ||
+                (!!profile.email &&
+                  (o.email || '').toLowerCase() === String(profile.email).toLowerCase()))
+          ) || [];
         const totalSpent = userOrders.reduce((sum, o) => sum + asNumber(o.total), 0);
         const orderCount = userOrders.length;
 

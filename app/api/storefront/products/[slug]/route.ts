@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getProductBySlug } from '@/lib/data/products';
+import { getProductBySlug, getSalesActive } from '@/lib/data/products';
+import { applyStorefrontPricing } from '@/lib/pricing';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,7 +20,10 @@ export async function GET(_request: Request, context: Ctx) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    return NextResponse.json(product);
+    const salesActive = await getSalesActive();
+    return NextResponse.json(
+      applyStorefrontPricing(product as Parameters<typeof applyStorefrontPricing>[0], salesActive)
+    );
   } catch (err: unknown) {
     console.error('[storefront/products/[slug]]', err);
     return NextResponse.json({ error: 'Failed to fetch product' }, { status: 500 });

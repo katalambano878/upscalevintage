@@ -8,7 +8,6 @@ import { asNumber, money } from '@/lib/format-money';
 export default function InventoryManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
-  const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -215,16 +214,16 @@ export default function InventoryManagementPage() {
                 ))}
               </div>
 
-              <button
-                onClick={() => setShowImportModal(true)}
+              <Link
+                href="/admin/products/import"
                 className="bg-store-navy hover:bg-store-navy text-white px-4 py-3 rounded-lg font-semibold transition-colors flex items-center space-x-2 whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-upload-line"></i>
                 <span>Import CSV</span>
-              </button>
+              </Link>
 
               <button
-                onClick={() => setShowExportModal(true)}
+                onClick={handleExportCSV}
                 className="border-2 border-gray-300 hover:border-gray-400 text-gray-700 px-4 py-3 rounded-lg font-semibold transition-colors flex items-center space-x-2 whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-download-line"></i>
@@ -348,8 +347,6 @@ export default function InventoryManagementPage() {
           </div>
         </div>
       </div>
-      {showImportModal && <div className="hidden">Mock Modal</div>}
-      {showExportModal && <div className="hidden">Mock Export</div>}
     </div>
   );
 }

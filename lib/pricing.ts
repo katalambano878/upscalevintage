@@ -174,6 +174,28 @@ export function getProductCardPricing(
   };
 }
 
+/**
+ * Find the variant a cart label points at. Labels are "Name" or "Option2 / Name"
+ * (for example "Red / M"), matching how the product page builds them.
+ */
+export function findCartVariant<
+  V extends { name?: string | null; option2?: string | null },
+>(variants: V[], variantLabel: string | undefined | null): V | undefined {
+  if (!variantLabel?.trim() || variants.length === 0) return undefined;
+  const parts = variantLabel
+    .split(' / ')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    return variants.find(
+      (x) => (x.option2 || '').trim() === parts[0] && (x.name || '').trim() === parts[1]
+    );
+  }
+  return variants.find(
+    (x) => (x.name || '').trim() === parts[0] || (x.option2 || '').trim() === parts[0]
+  );
+}
+
 /** Resolve authoritative unit price at checkout/POS from DB row + cart variant label */
 export function resolveCartLineUnitPrice(
   product: {
@@ -191,36 +213,7 @@ export function resolveCartLineUnitPrice(
   variantLabel: string | undefined | null,
   salesActive: boolean
 ): number {
-  const variants = product.product_variants || [];
-  if (!variantLabel?.trim() || variants.length === 0) {
-    return resolveProductPrice({
-      salesActive,
-      price: product.price,
-      salePrice: product.sale_price,
-      compareAtPrice: product.compare_at_price,
-    }).effective;
-  }
-  const parts = variantLabel
-    .split(' / ')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  let v:
-    | NonNullable<(typeof product)['product_variants']>[number]
-    | undefined;
-  if (parts.length >= 2) {
-    v = variants.find(
-      (x) =>
-        (x.option2 || '').trim() === parts[0] &&
-        (x.name || '').trim() === parts[1]
-    );
-  }
-  if (!v && parts.length === 1) {
-    v = variants.find(
-      (x) =>
-        (x.name || '').trim() === parts[0] ||
-        (x.option2 || '').trim() === parts[0]
-    );
-  }
+  const v = findCartVariant(product.product_variants || [], variantLabel);
   if (!v) {
     return resolveProductPrice({
       salesActive,
@@ -237,4 +230,59 @@ export function resolveCartLineUnitPrice(
     variantSalePrice: v.sale_price,
     compareAtPrice: product.compare_at_price,
   }).effective;
+}
+
+type PricedVariant = {
+  price?: number | string | null;
+  sale_price?: number | string | null;
+  compare_at_price?: number | string | null;
+};
+
+type PricedProduct = {
+  price: number | string;
+  sale_price?: number | string | null;
+  compare_at_price?: number | string | null;
+  product_variants?: unknown;
+};
+
+/**
+ * Rewrites a product for the storefront so `price` is what checkout will
+ * charge and `compare_at_price` is the "was" price. Sale mode is applied on
+ * the server (the same rules as resolveCartLineUnitPrice), so every page shows
+ * the charged amount without knowing whether a sale is on. `sale_price` is
+ * cleared so no page applies it a second time.
+ */
+export function applyStorefrontPricing<T extends PricedProduct>(product: T, salesActive: boolean): T {
+  const productPrice = Number(product.price) || 0;
+  const productSale = product.sale_price != null ? Number(product.sale_price) : null;
+  const compare = product.compare_at_price != null ? Number(product.compare_at_price) : null;
+
+  const r = resolveProductPrice({
+    salesActive,
+    price: productPrice,
+    salePrice: productSale,
+    compareAtPrice: compare,
+  });
+
+  const variants = Array.isArray(product.product_variants)
+    ? (product.product_variants as PricedVariant[]).map((v) => {
+        const rv = resolveVariantPrice({
+          salesActive,
+          productPrice,
+          productSalePrice: productSale,
+          variantPrice: Number(v.price ?? productPrice),
+          variantSalePrice: v.sale_price != null ? Number(v.sale_price) : null,
+          compareAtPrice: compare,
+        });
+        return { ...v, price: rv.effective, compare_at_price: rv.originalDisplay, sale_price: null };
+      })
+    : product.product_variants;
+
+  return {
+    ...product,
+    price: r.effective,
+    compare_at_price: r.originalDisplay,
+    sale_price: null,
+    product_variants: variants,
+  };
 }

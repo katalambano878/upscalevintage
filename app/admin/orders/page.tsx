@@ -201,13 +201,24 @@ export default function AdminOrdersPage() {
 
   const handleBulkAction = async (action: string, newStatus?: string) => {
     if (newStatus) {
-      try {
-        for (const orderId of selectedOrders) {
+      const updated: string[] = [];
+      const failed: string[] = [];
+      for (const orderId of selectedOrders) {
+        const order = orders.find((o) => o.id === orderId);
+        try {
           await apiData(`/api/orders/${orderId}`, { method: 'PATCH', json: { status: newStatus } });
+          updated.push(orderId);
+        } catch (err) {
+          failed.push(
+            `${order?.order_number || orderId.slice(0, 8)}: ${err instanceof Error ? err.message : 'failed'}`
+          );
         }
+      }
 
-        const updatedOrders = orders.filter((o) => selectedOrders.includes(o.id));
-        updatedOrders.forEach((order) => {
+      // Notify only the customers whose order actually changed.
+      orders
+        .filter((o) => updated.includes(o.id))
+        .forEach((order) => {
           fetch('/api/notifications', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -219,13 +230,13 @@ export default function AdminOrdersPage() {
           }).catch((err) => console.error('Notification error', err));
         });
 
-        await fetchOrders();
-        setSelectedOrders([]);
-        alert(`${selectedOrders.length} orders updated to ${newStatus}`);
-      } catch (error) {
-        console.error('Error updating orders:', error);
-        alert('Failed to update orders');
-      }
+      await fetchOrders();
+      setSelectedOrders([]);
+      alert(
+        failed.length
+          ? `${updated.length} order(s) updated to ${newStatus}. Not updated:\n${failed.join('\n')}`
+          : `${updated.length} order(s) updated to ${newStatus}`
+      );
     } else if (action === 'Export') {
       const ordersToExport = orders.filter(o => selectedOrders.includes(o.id));
       const csvContent = `Order ID,Source,Customer,Email,Date,Items,Total,Status,Payment\n${ordersToExport.map(o =>

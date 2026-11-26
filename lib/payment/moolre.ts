@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { queryOne } from '@/lib/db';
 
 export type MoolreVerifyResult = {
@@ -34,9 +35,10 @@ export function validateCallbackSecret(body: Record<string, unknown>, req?: Requ
   }
 
   const candidates: string[] = [];
-  const bodySecret = body.secret ?? body.callback_secret ?? body.token;
-  if (bodySecret != null && String(bodySecret).trim()) {
-    candidates.push(String(bodySecret));
+  // Moolre puts the webhook secret inside `data`, next to txstatus/externalref.
+  const data = (body.data && typeof body.data === 'object' ? body.data : {}) as Record<string, unknown>;
+  for (const value of [body.secret, body.callback_secret, body.token, data.secret, data.callback_secret]) {
+    if (value != null && String(value).trim()) candidates.push(String(value));
   }
 
   if (req) {
@@ -51,7 +53,11 @@ export function validateCallbackSecret(body: Record<string, unknown>, req?: Requ
     }
   }
 
-  return candidates.some((value) => value === expected);
+  const expectedBuf = Buffer.from(expected);
+  return candidates.some((value) => {
+    const buf = Buffer.from(value);
+    return buf.length === expectedBuf.length && timingSafeEqual(buf, expectedBuf);
+  });
 }
 
 export function parseMerchantOrderRef(rawRef: string): string {
@@ -79,7 +85,7 @@ export function extractOrderRefFromCallback(body: Record<string, unknown>): {
     : String(metadata.original_order_number || '');
 
   const moolreReference = String(
-    data.transactionid || data.thirdpartyref || body.reference || 'callback'
+    data.transactionid || data.thirdpartyref || body.reference || rawExternalRef || merchantOrderRef
   );
 
   return { merchantOrderRef, moolreReference, rawExternalRef };

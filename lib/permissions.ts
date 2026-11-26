@@ -133,6 +133,9 @@ export const ADMIN_PAGE_ACCESS: { prefix: string; permission: PermissionKey }[] 
   { prefix: '/admin/test-sms', permission: 'notifications.send' },
   { prefix: '/admin/blog', permission: 'blog.manage' },
   { prefix: '/admin/modules', permission: 'settings.manage' },
+  { prefix: '/admin/sms-credit', permission: 'settings.manage' },
+  { prefix: '/admin/returns', permission: 'orders.view' },
+  { prefix: '/admin/support', permission: 'customers.view' },
 ];
 
 export function permissionForPath(pathname: string): PermissionKey | null {

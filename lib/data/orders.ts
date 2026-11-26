@@ -1,7 +1,7 @@
 import { query, queryOne, transaction } from '@/lib/db';
 import { ApiError } from '@/lib/api';
 import { validateCoupon } from '@/lib/coupons';
-import { parseStorePricingValue, resolveCartLineUnitPrice } from '@/lib/pricing';
+import { findCartVariant, parseStorePricingValue, resolveCartLineUnitPrice } from '@/lib/pricing';
 import {
   computePaymentPlan,
   normalizePaymentOption,
@@ -63,16 +63,21 @@ export async function createOrderFromCheckout(input: {
   for (const item of input.cart) {
     const productId = await resolveProductId(item.id);
     if (!productId) {
-      throw new Error(`Product not found: ${item.name}. Please remove it from your cart and try again.`);
+      throw new ApiError(
+        `${item.name} is no longer available. Please remove it from your cart and try again.`,
+        409,
+        'product_unavailable'
+      );
     }
     resolvedLines.push({ item, productId });
   }
 
   const uniqueIds = [...new Set(resolvedLines.map((l) => l.productId))];
   const productsResult = await query(
-    `SELECT id, price, sale_price, compare_at_price, metadata,
+    `SELECT id, name, sku, price, sale_price, compare_at_price, metadata, quantity, moq,
+      status::text AS status, track_quantity, continue_selling,
       COALESCE(
-        (SELECT jsonb_agg(jsonb_build_object('id', pv.id, 'name', pv.name, 'option1', pv.option1, 'option2', pv.option2, 'price', pv.price, 'sale_price', pv.sale_price))
+        (SELECT jsonb_agg(jsonb_build_object('id', pv.id, 'name', pv.name, 'sku', pv.sku, 'option1', pv.option1, 'option2', pv.option2, 'price', pv.price, 'sale_price', pv.sale_price, 'quantity', pv.quantity))
          FROM product_variants pv WHERE pv.product_id = p.id),
         '[]'::jsonb
       ) AS product_variants
@@ -85,11 +90,54 @@ export async function createOrderFromCheckout(input: {
   let computedSubtotal = 0;
   const orderItemsPayload: Record<string, unknown>[] = [];
 
+  // Units asked for per product / variant across all cart lines, so two lines
+  // of the same item cannot together exceed what is on the shelf.
+  const requestedByStockKey = new Map<string, number>();
+
   for (const { item, productId } of resolvedLines) {
     const qty = Math.max(1, Math.floor(Number(item.quantity) || 0));
     const p = productMap.get(productId) as Record<string, unknown> | undefined;
-    if (!p) {
-      throw new Error(`Product not found: ${item.name}. Please remove it from your cart and try again.`);
+    if (!p || (input.channel !== 'pos' && p.status !== 'active')) {
+      throw new ApiError(
+        `${item.name} is no longer available. Please remove it from your cart and try again.`,
+        409,
+        'product_unavailable'
+      );
+    }
+
+    type VariantRow = { id: string; name: string | null; sku: string | null; option2: string | null; quantity: number | null };
+    const variants = (Array.isArray(p.product_variants) ? p.product_variants : []) as VariantRow[];
+    const variant = findCartVariant(variants, item.variant);
+    // Online shoppers must pick an option, otherwise the base price would be
+    // charged for a variant that costs more. The till sells by product.
+    if (variants.length > 0 && !variant && (item.variant || input.channel !== 'pos')) {
+      throw new ApiError(
+        `The option you picked for ${item.name} is no longer available. Please remove it from your cart and add it again.`,
+        409,
+        'variant_unavailable'
+      );
+    }
+
+    const moq = Math.max(1, Number(p.moq) || 1);
+    if (input.channel !== 'pos' && qty < moq) {
+      throw new ApiError(`${item.name} has a minimum order of ${moq}. Please raise the quantity in your cart.`, 409, 'below_moq');
+    }
+
+    if (p.track_quantity !== false && p.continue_selling !== true) {
+      const stockKey = variant ? `v:${variant.id}` : `p:${productId}`;
+      const available = Math.max(0, Number(variant ? variant.quantity : p.quantity) || 0);
+      const requested = (requestedByStockKey.get(stockKey) || 0) + qty;
+      requestedByStockKey.set(stockKey, requested);
+      if (requested > available) {
+        const label = item.variant ? `${item.name} (${item.variant})` : item.name;
+        throw new ApiError(
+          available === 0
+            ? `${label} is sold out. Please remove it from your cart.`
+            : `Only ${available} of ${label} left. Please lower the quantity in your cart.`,
+          409,
+          'insufficient_stock'
+        );
+      }
     }
     const unit = resolveCartLineUnitPrice(
       p as Parameters<typeof resolveCartLineUnitPrice>[0],
@@ -100,7 +148,9 @@ export async function createOrderFromCheckout(input: {
     const prodMeta = (p.metadata || {}) as Record<string, unknown>;
     orderItemsPayload.push({
       product_id: productId,
-      product_name: item.name,
+      variant_id: variant?.id || null,
+      sku: variant?.sku || (p.sku as string | null) || null,
+      product_name: String(p.name || item.name),
       variant_name: item.variant || null,
       quantity: qty,
       unit_price: unit,
@@ -113,7 +163,7 @@ export async function createOrderFromCheckout(input: {
     });
   }
 
-  const shipping = input.shippingData;
+  const shipping: Record<string, string> = { ...input.shippingData, email: String(input.shippingData.email || '').trim().toLowerCase() };
   let discountTotal = 0;
   let shippingFinal = shippingCost;
   let couponMeta: Record<string, unknown> = {};
@@ -194,8 +244,8 @@ export async function createOrderFromCheckout(input: {
 
     for (const row of orderItemsPayload) {
       await client.query(
-        `INSERT INTO order_items (order_id, product_id, product_name, variant_name, quantity, unit_price, total_price, metadata)
-         VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8::jsonb)`,
+        `INSERT INTO order_items (order_id, product_id, variant_id, sku, product_name, variant_name, quantity, unit_price, total_price, metadata)
+         VALUES ($1::uuid, $2::uuid, $9::uuid, $10, $3, $4, $5, $6, $7, $8::jsonb)`,
         [
           order.id,
           row.product_id,
@@ -205,6 +255,8 @@ export async function createOrderFromCheckout(input: {
           row.unit_price,
           row.total_price,
           JSON.stringify(row.metadata),
+          row.variant_id,
+          row.sku,
         ]
       );
     }
@@ -270,11 +322,31 @@ export async function getOrderById(id: string, userId?: string | null, isStaff?:
       (SELECT full_name FROM profiles WHERE id = o.placed_by) AS placed_by_name,
       (SELECT email FROM users WHERE id = o.placed_by) AS placed_by_email,
       COALESCE(
-        (SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.created_at)
-         FROM order_items oi WHERE oi.order_id = o.id),
+        (SELECT jsonb_agg(
+           to_jsonb(oi)
+           || jsonb_build_object(
+                'sku', COALESCE(oi.sku, pv.sku, pr.sku),
+                'products', jsonb_build_object(
+                  'name', pr.name,
+                  'slug', pr.slug,
+                  'product_images', COALESCE(
+                    (SELECT jsonb_agg(jsonb_build_object('url', pi.url) ORDER BY pi.position)
+                     FROM product_images pi WHERE pi.product_id = oi.product_id),
+                    '[]'::jsonb
+                  )
+                )
+              )
+           ORDER BY oi.created_at)
+         FROM order_items oi
+         LEFT JOIN products pr ON pr.id = oi.product_id
+         LEFT JOIN product_variants pv ON pv.id = oi.variant_id
+         WHERE oi.order_id = o.id),
         '[]'::jsonb
       ) AS order_items
-     FROM orders o WHERE o.id = $1::uuid OR o.order_number = $1::text`,
+     FROM orders o
+     WHERE (CASE WHEN $1 ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                 THEN o.id = $1::uuid ELSE false END)
+        OR o.order_number = $1::text`,
     [id]
   );
   if (!row) return null;

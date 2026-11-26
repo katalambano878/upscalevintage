@@ -58,7 +58,7 @@ export default function AdminCategoriesPage() {
   const handleDelete = async (categoryId: string) => {
     if (!confirm('Are you sure you want to delete this category? Products in it will have no category.')) return;
     try {
-      await apiDelete(`/api/catalog/categories/${categoryId}`);
+      await apiData(`/api/catalog/categories/${categoryId}`, { method: 'DELETE' });
       setCategories(categories.filter((c) => c.id !== categoryId));
       alert('Category deleted successfully');
     } catch (err: any) {
@@ -112,7 +112,7 @@ export default function AdminCategoriesPage() {
       };
 
       if (showEditModal && editingCategory) {
-        await apiPatch(`/api/catalog/categories/${editingCategory.id}`, payload );
+        await apiData(`/api/catalog/categories/${editingCategory.id}`, { method: 'PATCH', json: payload });
         alert('Category updated');
       } else {
         await apiData('/api/catalog/categories', { method: 'POST', body: payload  });

@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { cachedQuery } from '@/lib/query-cache';
 import ProductCard from '@/components/ProductCard';
 import ProductReviews from '@/components/ProductReviews';
 import { StructuredData, generateProductSchema, generateBreadcrumbSchema } from '@/components/SEOHead';
 import { notFound } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
+import { useWishlist } from '@/context/WishlistContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { asNumber, money } from '@/lib/format-money';
 import {
@@ -25,11 +26,12 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
   usePageTitle(product?.name || 'Product');
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
+  const imageTouch = useRef<{ x: number; y: number } | null>(null);
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedSize, setSelectedSize] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('description');
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
   const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
 
   const { addToCart } = useCart();
@@ -93,6 +95,7 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
         }
 
         setProduct(transformedProduct);
+        setSelectedImage(0);
         setSelectedColor('');
         setSelectedSize('');
 
@@ -253,6 +256,11 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
     category: product.category
   });
 
+  const isWishlisted = isInWishlist(product.id);
+  const imageCount = product.images.length;
+  const showPreviousImage = () => setSelectedImage((current: number) => Math.max(0, current - 1));
+  const showNextImage = () => setSelectedImage((current: number) => Math.min(imageCount - 1, current + 1));
+
   const siteUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://upscalevintage.shop').replace(/\/+$/, '');
   const breadcrumbSchema = generateBreadcrumbSchema([
     { name: 'Home', url: siteUrl },
@@ -285,7 +293,24 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
             <div className="grid lg:grid-cols-2 gap-12">
               <div>
-                <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-100 mb-4 shadow-lg border border-gray-100">
+                <div
+                  className="relative aspect-square rounded-2xl overflow-hidden bg-gray-100 mb-4 shadow-lg border border-gray-100 touch-pan-y"
+                  onTouchStart={(event) => {
+                    const touch = event.changedTouches[0];
+                    imageTouch.current = { x: touch.clientX, y: touch.clientY };
+                  }}
+                  onTouchEnd={(event) => {
+                    const start = imageTouch.current;
+                    imageTouch.current = null;
+                    if (!start || imageCount < 2) return;
+                    const touch = event.changedTouches[0];
+                    const deltaX = touch.clientX - start.x;
+                    const deltaY = touch.clientY - start.y;
+                    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+                    if (deltaX < 0) showNextImage();
+                    else showPreviousImage();
+                  }}
+                >
                   <Image
                     src={product.images[selectedImage]}
                     alt={product.name}
@@ -294,11 +319,37 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                     sizes="(max-width: 1024px) 100vw, 50vw"
                     priority
                     quality={80}
+                    draggable={false}
                   />
                   {discount > 0 && (
                     <span className="absolute top-6 right-6 bg-red-600 text-white text-sm font-semibold px-4 py-2 rounded-full">
                       Save {discount}%
                     </span>
+                  )}
+                  {imageCount > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Previous photo"
+                        onClick={showPreviousImage}
+                        disabled={selectedImage === 0}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-gray-900 shadow disabled:opacity-40"
+                      >
+                        <i className="ri-arrow-left-s-line text-2xl"></i>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Next photo"
+                        onClick={showNextImage}
+                        disabled={selectedImage === imageCount - 1}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-gray-900 shadow disabled:opacity-40"
+                      >
+                        <i className="ri-arrow-right-s-line text-2xl"></i>
+                      </button>
+                      <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white">
+                        {selectedImage + 1} / {imageCount}
+                      </span>
+                    </>
                   )}
                 </div>
 
@@ -332,10 +383,27 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                     <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-3">{product.name}</h1>
                   </div>
                   <button
-                    onClick={() => setIsWishlisted(!isWishlisted)}
+                    type="button"
+                    onClick={() => {
+                      if (isWishlisted) {
+                        removeFromWishlist(product.id);
+                      } else {
+                        addToWishlist({
+                          id: product.id,
+                          name: product.name,
+                          price: hasVariants ? minVariantPrice : product.price,
+                          originalPrice: product.compare_at_price || undefined,
+                          image: product.images?.[0] || '',
+                          inStock: activeStock > 0 || hasVariants,
+                          slug: product.slug || slug,
+                        });
+                      }
+                    }}
+                    aria-pressed={isWishlisted}
+                    aria-label={isWishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
                     className="w-12 h-12 flex items-center justify-center border-2 border-gray-200 hover:border-store-navy rounded-full transition-colors cursor-pointer"
                   >
-                    <i className={`${isWishlisted ? 'ri-heart-fill text-red-600' : 'ri-heart-line text-gray-700'} text-xl`}></i>
+                    <i className={`${isWishlisted ? 'ri-heart-fill text-red-600' : 'ri-heart-line text-gray-700'} text-xl`} aria-hidden="true"></i>
                   </button>
                 </div>
 
@@ -498,18 +566,6 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                           Min. order: {product.moq} units
                         </span>
                       )}
-                      {activeStock > 10 && (
-                        <span className="text-gray-600 font-medium text-sm">
-                          <i className="ri-checkbox-circle-line mr-1 text-store-primary"></i>
-                          {activeStock} in stock
-                        </span>
-                      )}
-                      {activeStock > 0 && activeStock <= 10 && (
-                        <span className="text-amber-600 font-medium text-sm">
-                          <i className="ri-error-warning-line mr-1"></i>
-                          Only {activeStock} left in stock
-                        </span>
-                      )}
                       {activeStock === 0 && (
                         <span className="text-red-600 font-medium">
                           <i className="ri-close-circle-line mr-1"></i>
@@ -553,10 +609,6 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                   <div className="flex items-center text-gray-700">
                     <i className="ri-store-2-line text-xl text-store-primary mr-3"></i>
                     <span>Free store pickup available</span>
-                  </div>
-                  <div className="flex items-center text-gray-700">
-                    <i className="ri-arrow-left-right-line text-xl text-store-primary mr-3"></i>
-                    <span>30-day easy returns and exchanges</span>
                   </div>
                   <div className="flex items-center text-gray-700">
                     <i className="ri-shield-check-line text-xl text-store-primary mr-3"></i>

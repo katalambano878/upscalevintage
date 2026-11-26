@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query, queryOne } from '@/lib/db';
+import { query, queryOne, transaction } from '@/lib/db';
 import { noteAction } from '@/lib/audit';
 import { allow } from '@/lib/staff-gate';
 import { syncProductMedia } from '@/lib/data/catalog-sync';
@@ -117,16 +117,22 @@ export async function PATCH(request: Request, context: Ctx) {
   sets.push('updated_at = now()');
 
   try {
-    let updated = null;
-    if (sets.length) {
-      updated = await queryOne(
-        `UPDATE products SET ${sets.join(', ')} WHERE id = $1::uuid RETURNING *`,
-        params
-      );
-    }
-    if (images || variants) {
-      await syncProductMedia(id, images, variants);
-    }
+    // One transaction: if a variant insert fails (say a duplicate SKU), the
+    // product keeps its old photos and options instead of losing them.
+    let updated = await transaction(async (client) => {
+      let row = null;
+      if (sets.length) {
+        const result = await client.query(
+          `UPDATE products SET ${sets.join(', ')} WHERE id = $1::uuid RETURNING *`,
+          params
+        );
+        row = result.rows[0] ?? null;
+      }
+      if (images || variants) {
+        await syncProductMedia(id, images, variants, client);
+      }
+      return row;
+    });
     if (!updated) {
       updated = await queryOne(`SELECT * FROM products WHERE id = $1::uuid`, [id]);
     }
@@ -143,8 +149,8 @@ export async function PATCH(request: Request, context: Ctx) {
     if (code === '23505') {
       return NextResponse.json({ error: 'A product with that slug or SKU already exists.' }, { status: 409 });
     }
-    const message = err instanceof Error ? err.message : 'Update failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[catalog/products PATCH]', err);
+    return NextResponse.json({ error: 'Could not save the product. Please try again.' }, { status: 500 });
   }
 }
 

@@ -1,5 +1,14 @@
 import { query } from '@/lib/db';
 import { PRODUCT_VARIANTS_JSON_SQL } from '@/lib/product-variants';
+import { parseStorePricingValue } from '@/lib/pricing';
+
+/** Whether the store-wide sale is on right now (toggle + schedule). */
+export async function getSalesActive(): Promise<boolean> {
+  const rows = await query<{ value: unknown }>(
+    `SELECT value FROM site_settings WHERE key = 'store_pricing' LIMIT 1`
+  );
+  return parseStorePricingValue(rows[0]?.value).sales_active;
+}
 
 export type ProductListOptions = {
   featured?: boolean;
@@ -61,7 +70,11 @@ export async function getProductBySlug(slug: string) {
   const rows = await query(
     `
     SELECT
-      p.*,
+      p.id, p.name, p.slug, p.description, p.short_description, p.price, p.sale_price,
+      p.compare_at_price, p.sku, p.quantity, p.track_quantity, p.continue_selling,
+      p.weight, p.weight_unit, p.category_id, p.brand, p.tags, p.status, p.featured,
+      p.options, p.seo_title, p.seo_description, p.rating_avg, p.review_count,
+      p.metadata, p.moq, p.created_at, p.updated_at,
       CASE WHEN c.id IS NULL THEN NULL ELSE jsonb_build_object('id', c.id, 'name', c.name, 'slug', c.slug) END AS categories,
       COALESCE(
         (SELECT jsonb_agg(jsonb_build_object('id', pi.id, 'url', pi.url, 'position', pi.position, 'alt_text', pi.alt_text) ORDER BY pi.position)

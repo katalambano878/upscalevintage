@@ -305,8 +305,8 @@ const LLM_TOOLS = [
                     },
                     payment_method: {
                         type: 'string',
-                        enum: ['moolre', 'cod'],
-                        description: 'moolre = Moolre Mobile Money link (recommended), cod = cash on delivery where offered',
+                        enum: ['moolre'],
+                        description: 'moolre = Moolre Mobile Money link. Online orders are Mobile Money only.',
                     },
                 },
                 required: ['items', 'shipping', 'delivery_method', 'payment_method'],

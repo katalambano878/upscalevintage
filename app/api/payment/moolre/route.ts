@@ -9,6 +9,7 @@ type OrderRow = {
   total: number;
   email: string;
   payment_status: string;
+  status: string;
   metadata: Record<string, unknown> | null;
 };
 
@@ -45,9 +46,9 @@ export async function POST(req: Request) {
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
     const order = await queryOne<OrderRow>(
       isUUID
-        ? `SELECT id, order_number, total, email, payment_status::text AS payment_status, metadata
+        ? `SELECT id, order_number, total, email, payment_status::text AS payment_status, status::text AS status, metadata
            FROM orders WHERE id = $1::uuid OR order_number = $1::text LIMIT 1`
-        : `SELECT id, order_number, total, email, payment_status::text AS payment_status, metadata
+        : `SELECT id, order_number, total, email, payment_status::text AS payment_status, status::text AS status, metadata
            FROM orders WHERE order_number = $1::text LIMIT 1`,
       [orderId]
     );
@@ -59,6 +60,13 @@ export async function POST(req: Request) {
 
     if (order.payment_status === 'paid') {
       return NextResponse.json({ success: false, message: 'Order is already paid' }, { status: 400 });
+    }
+
+    if (order.status === 'cancelled' || order.status === 'refunded') {
+      return NextResponse.json(
+        { success: false, message: 'This order was cancelled. Please place a new order.' },
+        { status: 400 }
+      );
     }
 
     const amount = getChargeAmountForOrder(order);

@@ -1,6 +1,7 @@
 'use server';
 
 import { verifyAdminToken } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 
 export async function testSmsAction(phone: string, message: string, authToken: string) {
     // SECURITY: Verify admin authentication before allowing SMS sending
@@ -10,6 +11,9 @@ export async function testSmsAction(phone: string, message: string, authToken: s
             success: false,
             error: 'Unauthorized: ' + (auth.error || 'Admin access required')
         };
+    }
+    if (!can(auth.user, 'notifications.send')) {
+        return { success: false, error: 'You do not have permission to send texts.' };
     }
 
     try {

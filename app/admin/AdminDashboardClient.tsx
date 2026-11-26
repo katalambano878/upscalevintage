@@ -5,10 +5,9 @@ import { useState, useEffect } from 'react';
 import { apiData, apiPost, apiPatch, apiDelete } from '@/lib/client/api';
 import { asNumber, money } from '@/lib/format-money';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import type { DashboardSmsCredit } from '@/lib/sms-credit-types';
 
 
-export default function AdminDashboardClient({ smsCredit }: { smsCredit: DashboardSmsCredit }) {
+export default function AdminDashboardClient() {
   const [dateRange, setDateRange] = useState('7days'); // logic not implemented for this demo, just UI
   const [loading, setLoading] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);

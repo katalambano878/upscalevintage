@@ -151,7 +151,8 @@ export default function AdminLayout({
     {
       title: 'Buy SMS',
       icon: 'ri-bank-card-line',
-      path: '/admin/sms-credit'
+      path: '/admin/sms-credit',
+      permission: 'settings.manage'
     },
     {
       title: 'POS',
@@ -187,6 +188,18 @@ export default function AdminLayout({
       title: 'Customers',
       icon: 'ri-group-line',
       path: '/admin/customers',
+      permission: 'customers.view'
+    },
+    {
+      title: 'Returns',
+      icon: 'ri-arrow-go-back-line',
+      path: '/admin/returns',
+      permission: 'orders.view'
+    },
+    {
+      title: 'Support',
+      icon: 'ri-customer-service-2-line',
+      path: '/admin/support',
       permission: 'customers.view'
     },
     {

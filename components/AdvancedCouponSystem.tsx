@@ -48,6 +48,8 @@ export default function AdvancedCouponSystem({
         discount?: number;
         freeShipping?: boolean;
         description?: string | null;
+        minimum_purchase?: number | null;
+        maximum_discount?: number | null;
       };
       if (!res.ok) {
         setError(data.error || 'Could not validate coupon');
@@ -64,6 +66,8 @@ export default function AdvancedCouponSystem({
         discount: Number(data.discount) || 0,
         freeShipping: Boolean(data.freeShipping),
         description: data.description || undefined,
+        minimumPurchase: data.minimum_purchase != null ? Number(data.minimum_purchase) : undefined,
+        maximumDiscount: data.maximum_discount != null ? Number(data.maximum_discount) : undefined,
       });
       setCouponCode('');
     } catch {

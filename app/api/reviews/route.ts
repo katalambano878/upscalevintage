@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { verifyAuth } from '@/lib/auth';
+import { isStaffRole, verifyAuth } from '@/lib/auth';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const productId = searchParams.get('product_id');
   const slug = searchParams.get('slug');
-  const status = searchParams.get('status') || 'approved';
+  let status = searchParams.get('status') || 'approved';
+  if (status !== 'approved') {
+    // Unpublished reviews are for moderators only.
+    const auth = await verifyAuth(request);
+    if (!auth.authenticated || !isStaffRole(auth.role || auth.user?.role || '')) {
+      status = 'approved';
+    }
+  }
 
   if (!productId && !slug) {
     return NextResponse.json({ error: 'product_id or slug required' }, { status: 400 });
@@ -66,8 +73,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(created, { status: 201 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Create failed';
+    if ((err as { code?: string }).code === '23505') {
+      return NextResponse.json({ error: 'You have already reviewed this product.' }, { status: 409 });
+    }
     console.error('[reviews POST]', err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Could not save your review. Please try again.' }, { status: 500 });
   }
 }

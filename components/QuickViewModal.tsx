@@ -204,9 +204,9 @@ export default function QuickViewModal({ product, isOpen, onClose }: QuickViewMo
                       <i className="ri-add-line"></i>
                     </button>
                   </div>
-                  <p className="text-sm text-gray-600 mt-2">
-                    {product.inStock ? `${product.stockCount} in stock` : 'Out of stock'}
-                  </p>
+                  {!product.inStock && (
+                    <p className="text-sm text-red-600 mt-2">Out of stock</p>
+                  )}
                 </div>
 
                 <div className="space-y-3 mt-auto">

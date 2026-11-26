@@ -4,6 +4,7 @@ import { noteAction } from '@/lib/audit';
 import { createOrderFromCheckout } from '@/lib/data/orders';
 import { sendAndMarkOrderConfirmation } from '@/lib/notifications';
 import { allow } from '@/lib/staff-gate';
+import { ApiError } from '@/lib/api';
 
 /** In-store POS checkout (cash / card / immediate paid). */
 export async function POST(request: Request) {
@@ -25,6 +26,15 @@ export async function POST(request: Request) {
 
     if (!orderNumber || !cart?.length || !shippingData?.email) {
       return NextResponse.json({ error: 'Invalid POS payload' }, { status: 400 });
+    }
+
+    // Walk-ins without an email all arrive as one placeholder address. Key them
+    // by phone instead, so each walk-in gets their own customer record rather
+    // than every till sale piling onto one.
+    const email = String(shippingData.email).trim().toLowerCase();
+    const phoneDigits = String(shippingData.phone || '').replace(/[^0-9]/g, '');
+    if (email === 'pos-walkin@store.local' && phoneDigits) {
+      shippingData.email = `${phoneDigits}@pos.local`;
     }
 
     const order = await createOrderFromCheckout({
@@ -67,8 +77,11 @@ export async function POST(request: Request) {
     }
     return NextResponse.json(paid || order, { status: 201 });
   } catch (err: unknown) {
+    if (err instanceof ApiError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     const message = err instanceof Error ? err.message : 'POS checkout failed';
     console.error('[pos/checkout]', message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'POS checkout failed. Please try again.' }, { status: 500 });
   }
 }

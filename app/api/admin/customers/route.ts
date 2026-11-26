@@ -10,11 +10,16 @@ type OrderStats = {
 
 function bumpStats(map: Map<string, OrderStats>, key: string, order: {
   status: string | null;
+  payment_status: string | null;
   total: string | number | null;
   created_at: string;
 }) {
   if (!key) return;
-  const cancelled = order.status === 'cancelled';
+  // Unpaid (abandoned) and cancelled orders are not spending.
+  const cancelled =
+    order.status === 'cancelled' ||
+    order.status === 'refunded' ||
+    (order.payment_status !== 'paid' && order.payment_status !== 'partially_paid');
   const orderTotal = cancelled ? 0 : Number(order.total || 0);
   const existing = map.get(key);
   if (!existing) {
@@ -56,7 +61,8 @@ export async function GET(request: Request) {
   if (gate.denied) return gate.denied;
 
   const { searchParams } = new URL(request.url);
-  const limit = Math.min(parseInt(searchParams.get('limit') || '100', 10) || 100, 500);
+  // A boutique's whole customer list fits; campaigns and detail pages need all of it.
+  const limit = Math.min(parseInt(searchParams.get('limit') || '10000', 10) || 10000, 10000);
   const search = searchParams.get('q')?.trim();
 
   try {
@@ -87,12 +93,14 @@ export async function GET(request: Request) {
       total: string | number | null;
       created_at: string;
       status: string | null;
+      payment_status: string | null;
       shipping_address: Record<string, unknown> | null;
     }>(
-      `SELECT id, user_id, email, total, created_at, status, shipping_address
+      `SELECT id, user_id, email, total, created_at, status::text AS status,
+              payment_status::text AS payment_status, shipping_address
        FROM orders
        ORDER BY created_at DESC
-       LIMIT 5000`
+       LIMIT 20000`
     );
 
     const statsByEmail = new Map<string, OrderStats>();

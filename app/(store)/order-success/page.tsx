@@ -137,7 +137,6 @@ function OrderSuccessContent() {
   const deliveryLabel = formatDeliveryMethod(deliveryMethod);
   const deliveryHint = deliveryMethodHint(deliveryMethod);
   const estimatedDelivery = new Date(new Date(order.created_at).getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-  const pointsEarned = Math.floor(asNumber(order.total) / 10);
   const orderItems = Array.isArray(order.order_items) ? order.order_items : [];
   const balanceDue = asNumber(order.metadata?.balance_due, asNumber(order.total) / 2);
 
@@ -210,7 +209,7 @@ function OrderSuccessContent() {
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
               <Link
-                href={`/account?tab=orders`}
+                href={`/order-tracking?order=${encodeURIComponent(order.order_number || '')}`}
                 className="bg-store-navy hover:bg-store-navy-light text-white px-8 py-4 rounded-lg font-semibold transition-colors inline-flex items-center justify-center whitespace-nowrap"
               >
                 <i className="ri-file-list-3-line mr-2"></i>
@@ -225,25 +224,6 @@ function OrderSuccessContent() {
               </Link>
             </div>
 
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-6 border-2 border-amber-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 flex items-center justify-center bg-amber-500 rounded-full">
-                    <i className="ri-star-fill text-white text-2xl"></i>
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-gray-900 text-lg">You Earned {pointsEarned} Points!</p>
-                    <p className="text-sm text-gray-600">Join our loyalty program to redeem.</p>
-                  </div>
-                </div>
-                <Link
-                  href="/register"
-                  className="bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap"
-                >
-                  Join Now
-                </Link>
-              </div>
-            </div>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8 mb-8">
@@ -377,7 +357,7 @@ function OrderSuccessContent() {
                 <i className="ri-customer-service-line mr-1"></i>
                 Contact Support
               </Link>
-              <Link href="/account/orders" className="text-store-ink hover:text-store-ink font-semibold whitespace-nowrap">
+              <Link href={`/order-tracking?order=${encodeURIComponent(order.order_number || '')}`} className="text-store-ink hover:text-store-ink font-semibold whitespace-nowrap">
                 <i className="ri-question-line mr-1"></i>
                 Order Help
               </Link>

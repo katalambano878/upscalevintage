@@ -1,5 +1,7 @@
 'use client';
 
+import { findCartVariant } from '@/lib/pricing';
+
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -43,7 +45,7 @@ export default function OrderHistory() {
         const me = await apiData<{ user: { email?: string } | null }>('/api/auth/me').catch(() => null);
         if (me?.user?.email) setUserEmail(me.user.email);
 
-        const data = await apiData<any[]>('/api/orders');
+        const data = await apiData<any[]>('/api/orders?scope=mine');
         const formattedOrders = data.map((order: any) => ({
           id: order.id,
           orderNumber: order.order_number,
@@ -107,17 +109,23 @@ export default function OrderHistory() {
             product.images?.[0]?.url ||
             item.image ||
             '/logo.png';
-          const price = Number(product.sale_price ?? product.price ?? item.price) || 0;
+          // The storefront API already applies sale mode to price and variant prices.
+          const variants: any[] = Array.isArray(product.product_variants) ? product.product_variants : [];
+          const variant = item.variant ? findCartVariant(variants, item.variant) : undefined;
+          if (variants.length > 0 && !variant) continue;
+          const lineStock = variant ? Number(variant.quantity ?? 0) : qty;
+          if (lineStock <= 0) continue;
+          const price = Number(variant?.price ?? product.price ?? item.price) || 0;
 
           addToCart({
             id: product.id || item.productId,
             name: product.name || item.name,
             price,
             image,
-            quantity: Math.max(1, item.quantity),
             variant: item.variant || undefined,
             slug: product.slug || item.slug || product.id || item.productId,
-            maxStock: Math.max(1, qty || item.quantity || 1),
+            quantity: Math.min(Math.max(1, item.quantity), lineStock),
+            maxStock: lineStock,
             moq: Number(product.moq || product.min_order_quantity || 1) || 1,
           });
           added += 1;
@@ -253,13 +261,6 @@ export default function OrderHistory() {
                     <i className="ri-refresh-line mr-2" />
                     {reorderingId === order.id ? 'Adding…' : 'Reorder'}
                   </button>
-                  <Link
-                    href={`/account/invoice/${order.id}?print=true`}
-                    className="flex-1 sm:flex-none text-center px-4 py-2 border-2 border-gray-300 text-gray-900 rounded-lg font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap"
-                  >
-                    <i className="ri-download-line mr-2" />
-                    Invoice
-                  </Link>
                   <Link
                     href={helpHref}
                     className="flex-1 sm:flex-none text-center px-4 py-2 border-2 border-gray-300 text-gray-900 rounded-lg font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap"

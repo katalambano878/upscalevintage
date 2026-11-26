@@ -138,7 +138,23 @@ export async function POST(request: Request) {
       if (name.length > 100 || subject.length > 200 || message.length > 5000) {
         return NextResponse.json({ error: 'Input too long' }, { status: 400 });
       }
-      await sendContactMessage(payload);
+      // Keep a copy so a message is not lost if email is down or not set up.
+      await query(
+        `INSERT INTO contact_submissions (name, email, phone, subject, message)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          String(name).trim(),
+          String(email).trim().toLowerCase(),
+          payload.phone ? String(payload.phone).slice(0, 40) : null,
+          String(subject).trim(),
+          String(message).trim(),
+        ]
+      );
+      try {
+        await sendContactMessage(payload);
+      } catch (mailErr) {
+        console.error('[notifications] contact email failed (message saved):', mailErr);
+      }
       return NextResponse.json({ success: true, message: 'Contact message sent' });
     }
 

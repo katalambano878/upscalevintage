@@ -16,10 +16,7 @@ export function SmsCreditDashboardCard({ buySmsHref = '/admin/sms-credit' }: Pro
     let cancelled = false;
     (async () => {
       try {
-        const headers = new Headers();
-        const match = document.cookie.match(/(?:^|; )sb-access-token=([^;]*)/);
-        if (match?.[1]) headers.set('Authorization', `Bearer ${decodeURIComponent(match[1])}`);
-        const res = await fetch('/api/admin/sms-credit', { headers, credentials: 'include', cache: 'no-store' });
+        const res = await fetch('/api/admin/sms-credit', { credentials: 'include', cache: 'no-store' });
         const json = await res.json().catch(() => null);
         if (cancelled || !res.ok || !json?.configured) return;
         const sms = Number(json.sms_left);

@@ -65,7 +65,7 @@ export async function getAdminAnalytics(range: string) {
     periodMetrics(window.start, window.end),
     periodMetrics(window.prevStart, window.prevEnd),
     query<{ date: string; sales: string; orders: string }>(
-      `SELECT to_char(date_trunc('day', created_at), 'Mon DD') AS date,
+      `SELECT to_char(date_trunc('day', created_at), 'Mon FMDD') AS date,
               COALESCE(SUM(total), 0)::text AS sales,
               COUNT(*)::text AS orders
        FROM orders

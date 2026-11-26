@@ -1,65 +1,60 @@
 import { NextResponse } from 'next/server';
-import { SignJWT } from 'jose';
-import { queryOne } from '@/lib/db';
-import { Resend } from 'resend';
+import { createPasswordResetToken } from '@/lib/repositories/users';
+import { sendEmail } from '@/lib/notifications';
+import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limit';
 
-function getSecret() {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) throw new Error('Missing AUTH_SECRET');
-  return new TextEncoder().encode(secret);
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
 export async function POST(request: Request) {
+  // Same answer whether or not the account exists, so this cannot be used to
+  // find out who shops here.
+  const okResponse = NextResponse.json({
+    ok: true,
+    message: 'If an account exists for that email, a reset link has been sent.',
+  });
+
+  const limit = checkRateLimit(`forgot-password:${getClientIdentifier(request)}`, {
+    maxRequests: 5,
+    windowSeconds: 15 * 60,
+  });
+  if (!limit.success) {
+    return NextResponse.json(
+      { error: 'Too many reset requests. Please wait a few minutes and try again.' },
+      { status: 429 }
+    );
+  }
+
   try {
-    const body = await request.json();
-    const email = String(body.email || '')
-      .trim()
-      .toLowerCase();
-
-    // Always return success to avoid account enumeration
-    const okResponse = NextResponse.json({
-      ok: true,
-      message: 'If an account exists for that email, a reset link has been sent.',
-    });
-
+    const body = await request.json().catch(() => ({}));
+    const email = String(body.email || '').trim().toLowerCase();
     if (!email || !/\S+@\S+\.\S+/.test(email)) {
       return okResponse;
     }
 
-    const user = await queryOne<{ id: string; email: string }>(
-      `SELECT id, email FROM users WHERE lower(email) = lower($1) LIMIT 1`,
-      [email]
-    );
-
-    if (!user) {
+    // Single-use token stored hashed in auth_tokens; older links stop working.
+    const issued = await createPasswordResetToken(email);
+    if (!issued) {
       return okResponse;
     }
 
-    const token = await new SignJWT({ purpose: 'password_reset', email: user.email })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setSubject(user.id)
-      .setIssuedAt()
-      .setExpirationTime('1h')
-      .sign(getSecret());
-
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://upscalevintage.shop').replace(/\/$/, '');
-    const resetUrl = `${appUrl}/auth/reset-password?token=${encodeURIComponent(token)}`;
+    const resetUrl = `${appUrl}/auth/reset-password?token=${encodeURIComponent(issued.token)}`;
+    const safeUrl = escapeHtml(resetUrl);
 
-    const apiKey = process.env.RESEND_API_KEY;
-    const from = process.env.EMAIL_FROM || 'Upscale Vintage <hello@upscalevintage.com>';
-
-    if (apiKey) {
-      const resend = new Resend(apiKey);
-      await resend.emails.send({
-        from,
-        to: user.email,
-        subject: 'Reset your Upscale Vintage password',
-        html: `<p>Reset your password by opening this link (valid 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p>`,
-      });
-    } else {
-      console.warn('[forgot-password] RESEND_API_KEY missing; reset URL logged for ops only');
-      console.warn('[forgot-password] resetUrl=', resetUrl);
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('[forgot-password] RESEND_API_KEY missing; reset email not sent');
+      return okResponse;
     }
+
+    await sendEmail({
+      to: email,
+      subject: 'Reset your Upscale Vintage password',
+      html: `<p>Someone asked to reset the password for your Upscale Vintage account.</p>
+<p><a href="${safeUrl}">Choose a new password</a></p>
+<p>This link works once and expires soon. If you did not ask for this, you can ignore this email.</p>`,
+    });
 
     return okResponse;
   } catch (err: unknown) {

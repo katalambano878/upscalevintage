@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { clientIp, fail, ok, readJson, route } from '@/lib/api';
 import { createSession } from '@/lib/auth';
 import { createUser } from '@/lib/repositories/users';
+import { sendWelcomeMessage } from '@/lib/notifications';
 import { validatePasswordStrength } from '@/lib/password';
 import { RATE_LIMITS, checkRateLimit, getClientIdentifier } from '@/lib/rate-limit';
 
@@ -39,6 +40,13 @@ export const POST = route(async (request) => {
         userAgent: request.headers.get('user-agent'),
         ipAddress: clientIp(request),
     });
+
+    // Best effort: a mail or SMS outage must not fail the sign-up.
+    sendWelcomeMessage({
+        email: user.email,
+        firstName: (input.fullName || '').split(' ')[0] || 'there',
+        phone: input.phone || undefined,
+    }).catch((err) => console.error('[register] welcome message failed:', err));
 
     return ok({ id: user.id, email: user.email, role: user.role }, { status: 201 });
 });

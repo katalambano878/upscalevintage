@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -17,6 +17,13 @@ export default function AdminLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const { getToken, verifying } = useRecaptcha();
+
+  // The admin layout sends signed-in customers here with ?error=unauthorized.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('error') === 'unauthorized') {
+      setError('This account does not have admin access. Sign in with a staff account.');
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

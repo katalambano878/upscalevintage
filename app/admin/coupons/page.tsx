@@ -101,8 +101,10 @@ function payloadFromForm(form: CouponForm) {
     maximum_discount: form.maximum_discount !== '' ? Number(form.maximum_discount) : null,
     usage_limit: form.usage_limit !== '' ? Number(form.usage_limit) : null,
     per_user_limit: Number(form.per_user_limit) || 1,
-    start_date: form.start_date || null,
-    end_date: form.end_date || null,
+    // Dates are whole days in Ghana time (UTC): a coupon ending on the 31st
+    // works until the end of the 31st, not its first second.
+    start_date: form.start_date ? `${form.start_date}T00:00:00Z` : null,
+    end_date: form.end_date ? `${form.end_date}T23:59:59Z` : null,
     is_active: form.is_active,
   };
 }
@@ -176,7 +178,7 @@ export default function AdminCouponsPage() {
   const handleDelete = async (coupon: CouponRow) => {
     if (!confirm(`Delete coupon "${coupon.code}"? This cannot be undone.`)) return;
     try {
-      await apiDelete(`/api/admin/coupons/${coupon.id}`);
+      await apiData(`/api/admin/coupons/${coupon.id}`, { method: 'DELETE' });
       setCoupons((prev) => prev.filter((c) => c.id !== coupon.id));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Delete failed';
@@ -202,7 +204,7 @@ export default function AdminCouponsPage() {
       }
 
       if (showEditModal && editingCoupon) {
-        await apiPatch(`/api/admin/coupons/${editingCoupon.id}`, payload );
+        await apiData(`/api/admin/coupons/${editingCoupon.id}`, { method: 'PATCH', json: payload });
       } else {
         await apiData('/api/admin/coupons', { method: 'POST', body: payload  });
       }

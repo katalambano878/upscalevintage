@@ -1,4 +1,7 @@
+import type { PoolClient } from 'pg';
 import { query } from '@/lib/db';
+
+type Runner = (text: string, params: unknown[]) => Promise<unknown>;
 
 export async function syncProductMedia(
   productId: string,
@@ -12,12 +15,15 @@ export async function syncProductMedia(
     option1?: string | null;
     option2?: string | null;
     metadata?: Record<string, unknown>;
-  }[]
+  }[],
+  /** Pass the transaction's client so a failed insert rolls the whole save back. */
+  client?: PoolClient
 ) {
+  const run: Runner = client ? (text, params) => client.query(text, params) : (text, params) => query(text, params);
   if (images) {
-    await query(`DELETE FROM product_images WHERE product_id = $1::uuid`, [productId]);
+    await run(`DELETE FROM product_images WHERE product_id = $1::uuid`, [productId]);
     for (const [idx, img] of images.entries()) {
-      await query(
+      await run(
         `INSERT INTO product_images (product_id, url, position, alt_text) VALUES ($1::uuid, $2, $3, $4)`,
         [productId, img.url, img.position ?? idx, img.alt_text || null]
       );
@@ -25,9 +31,9 @@ export async function syncProductMedia(
   }
 
   if (variants) {
-    await query(`DELETE FROM product_variants WHERE product_id = $1::uuid`, [productId]);
+    await run(`DELETE FROM product_variants WHERE product_id = $1::uuid`, [productId]);
     for (const v of variants) {
-      await query(
+      await run(
         `INSERT INTO product_variants (product_id, name, sku, price, sale_price, quantity, option1, option2, metadata)
          VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`,
         [

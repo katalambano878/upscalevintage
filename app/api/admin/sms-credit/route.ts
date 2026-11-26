@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { allow } from '@/lib/staff-gate';
 import { verifyAuth } from '@/lib/auth';
 import { confirmSmsCheckout, getSmsBilling, startSmsCheckout, taysendConfigured } from '@/lib/taysend-billing';
 
@@ -34,8 +35,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const denied = await requireAdmin(request);
-  if (denied) return denied;
+  // Buying texts spends the shop's money: owners and managers only, not cashiers.
+  const gate = await allow(request, 'settings.manage');
+  if (gate.denied) return gate.denied;
   if (!taysendConfigured()) {
     return NextResponse.json({ error: 'SMS buying is not connected on this store yet.' }, { status: 503 });
   }

@@ -11,6 +11,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import {
   clearAppliedCoupon,
   readAppliedCoupon,
+  couponDiscountFor,
   writeAppliedCoupon,
   type AppliedCoupon,
 } from '@/lib/coupon-session';
@@ -53,10 +54,11 @@ export default function CartPage() {
     clearAppliedCoupon();
   };
 
-  const couponDiscount = appliedCoupon?.discount || 0;
+  const couponDiscount = couponDiscountFor(appliedCoupon, subtotal);
 
-  const shipping = subtotal >= 200 ? 0 : 15;
-  const total = subtotal - couponDiscount + shipping;
+  // Store pickup is free and doorstep delivery is quoted after the order, so
+  // nothing is added here (checkout and the server charge no shipping either).
+  const total = Math.max(0, subtotal - couponDiscount);
 
   return (
     <div className="min-h-screen bg-brand-cream">
@@ -112,10 +114,11 @@ export default function CartPage() {
                               </button>
                             </div>
 
-                            <div className="text-sm text-brand-cocoa/70 mb-3 space-y-1">
-                              {item.variant && <p>Variant: {item.variant}</p>}
-                              <p className="text-brand-espresso font-medium">In Stock</p>
-                            </div>
+                            {item.variant && (
+                              <div className="text-sm text-brand-cocoa/70 mb-3">
+                                <p>Variant: {item.variant}</p>
+                              </div>
+                            )}
 
                             <div className="flex items-center justify-between flex-wrap gap-4">
                               <div className="flex items-baseline space-x-3">
@@ -217,14 +220,10 @@ export default function CartPage() {
 
                       <div className="flex justify-between text-brand-cocoa/80">
                         <span>Shipping</span>
-                        <span className="font-semibold">{shipping === 0 ? 'FREE' : `GH₵${shipping.toFixed(2)}`}</span>
+                        <span className="font-semibold">FREE</span>
                       </div>
 
-                      {shipping > 0 && (
-                        <p className="text-sm text-amber-600">
-                          {/* Shipping threshold text removed */}
-                        </p>
-                      )}
+
                     </div>
 
                     <div className="border-t border-brand-nude/50 pt-4 mb-6">
@@ -259,10 +258,6 @@ export default function CartPage() {
                       <div className="flex items-center text-sm text-brand-cocoa/70">
                         <i className="ri-shield-check-line text-brand-espresso mr-2"></i>
                         <span>Secure checkout</span>
-                      </div>
-                      <div className="flex items-center text-sm text-brand-cocoa/70">
-                        <i className="ri-arrow-left-right-line text-brand-espresso mr-2"></i>
-                        <span>30 day returns</span>
                       </div>
                       <div className="flex items-center text-sm text-brand-cocoa/70">
                         <i className="ri-customer-service-line text-brand-espresso mr-2"></i>

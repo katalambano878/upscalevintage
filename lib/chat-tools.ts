@@ -17,6 +17,8 @@
  * that is what the existing /api/payment/moolre route uses.
  */
 
+import { ApiError } from '@/lib/api';
+import { createOrderFromCheckout } from '@/lib/data/orders';
 import { query, queryOne, transaction } from './db';
 import { trackOrder as fetchTrackedOrder } from '@/lib/data/orders';
 import {
@@ -730,8 +732,8 @@ export async function createChatOrder(
     }
     // upscalevintage only supports Moolre out of the box. We still allow "cod"
     // as a placeholder for stores that toggle it on later.
-    if (!['moolre', 'cod'].includes(paymentMethod)) {
-        return { success: false, message: 'Invalid payment method. Only Moolre Mobile Money or Cash on Delivery are supported here.' };
+    if (paymentMethod !== 'moolre') {
+        return { success: false, message: 'Online orders are paid with Mobile Money. Cash is only taken in store.' };
     }
 
     const rateLimitKey = shipping.email.toLowerCase().trim();
@@ -749,14 +751,12 @@ export async function createChatOrder(
         region: sanitize(shipping.region),
     };
 
-    const shippingCost = DELIVERY_COSTS[deliveryMethod];
-
     try {
         const productIds = items.map((i) => i.productId);
         const products = await query<Record<string, unknown>>(
             `SELECT p.id, p.name, p.slug, p.status, p.description, p.price, p.compare_at_price, p.quantity, p.moq,
                     COALESCE((
-                      SELECT jsonb_agg(jsonb_build_object('id', v.id, 'name', v.name, 'price', v.price, 'sku', v.sku, 'compare_at_price', v.compare_at_price, 'quantity', v.quantity))
+                      SELECT jsonb_agg(jsonb_build_object('id', v.id, 'name', v.name, 'option2', v.option2, 'price', v.price, 'sku', v.sku, 'compare_at_price', v.compare_at_price, 'quantity', v.quantity))
                       FROM product_variants v WHERE v.product_id = p.id
                     ), '[]'::jsonb) AS product_variants,
                     COALESCE((
@@ -786,175 +786,65 @@ export async function createChatOrder(
             }
         }
 
-        let subtotal = 0;
-        const lineDetails: { product: any; variant: any | null; qty: number; unit: number }[] = [];
-
-        for (const item of items) {
+        // Chat orders go through the same code as website checkout, so prices,
+        // sale mode, stock checks and customer records all match.
+        const cart = items.map((item) => {
             const p = productMap.get(item.productId)!;
             const variants: any[] = Array.isArray(p.product_variants) ? p.product_variants : [];
-            // Pick the cheapest variant by default, mirroring the storefront's
-            // "default option" UX. Falls back to the product price.
-            const sortedVars = [...variants].sort((a: any, b: any) => Number(a.price) - Number(b.price));
-            const v = sortedVars[0] || null;
-            const unit = v ? Number(v.price) : Number(p.price);
-            if (!Number.isFinite(unit) || unit <= 0) {
-                return { success: false, message: `Product "${p.name}" has no valid price.` };
-            }
-            subtotal += unit * item.quantity;
-            lineDetails.push({ product: p, variant: v, qty: item.quantity, unit });
-        }
+            // Default to the cheapest in-stock option, like the storefront does.
+            const v =
+                [...variants]
+                    .filter((x: any) => Number(x.quantity) > 0)
+                    .sort((a: any, b: any) => Number(a.price) - Number(b.price))[0] || null;
+            const images: any[] = Array.isArray(p.product_images) ? p.product_images : [];
+            return {
+                id: String(p.id),
+                name: String(p.name),
+                slug: String(p.slug || ''),
+                quantity: item.quantity,
+                variant: v ? (v.option2 ? `${v.option2} / ${v.name}` : String(v.name)) : null,
+                image: images[0]?.url,
+            };
+        });
 
-        const total = subtotal + shippingCost;
         const orderNumber = generateOrderNumber();
+        const trackingNumber = `SLI-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
-        const shippingAddress = {
-            firstName: sanitizedShipping.firstName,
-            lastName: sanitizedShipping.lastName,
-            fullName: `${sanitizedShipping.firstName} ${sanitizedShipping.lastName}`.trim(),
-            address1: sanitizedShipping.address,
-            address2: '',
-            city: sanitizedShipping.city,
-            state: sanitizedShipping.region,
-            region: sanitizedShipping.region,
-            country: 'Ghana',
-            postalCode: '',
-            phone: sanitizedShipping.phone,
-            email: sanitizedShipping.email,
-        };
-
-        const order = await queryOne<{ id: string }>(
-            `INSERT INTO orders (
-               order_number, user_id, email, phone, status, payment_status, currency,
-               subtotal, tax_total, shipping_total, discount_total, total,
-               shipping_method, payment_method, payment_provider, shipping_address, billing_address, notes
-             ) VALUES (
-               $1, $2::uuid, $3, $4, 'pending'::order_status, 'pending'::payment_status, 'GHS',
-               $5, 0, $6, 0, $7,
-               $8, $9, $10, $11::jsonb, $12::jsonb, $13
-             ) RETURNING id`,
-            [
-                orderNumber,
-                userId || null,
-                sanitizedShipping.email,
-                sanitizedShipping.phone,
-                subtotal,
-                shippingCost,
-                total,
-                deliveryMethod,
-                paymentMethod,
-                paymentMethod === 'moolre' ? 'moolre' : null,
-                JSON.stringify(shippingAddress),
-                JSON.stringify(shippingAddress),
-                `Chat checkout — delivery: ${deliveryMethod}, pay: ${paymentMethod}`,
-            ]
-        );
-
-        if (!order) {
-            return { success: false, message: 'Failed to create order. Please try checkout on the website.' };
-        }
-
-        for (const row of lineDetails) {
-            await query(
-                `INSERT INTO order_items (
-                   order_id, product_id, variant_id, product_name, variant_name, sku,
-                   unit_price, quantity, total_price
-                 ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9)`,
-                [
-                    order.id,
-                    row.product.id,
-                    row.variant?.id || null,
-                    row.product.name,
-                    row.variant?.name || null,
-                    row.variant?.sku || null,
-                    row.unit,
-                    row.qty,
-                    row.unit * row.qty,
-                ]
-            );
-        }
-
-        if (paymentMethod === 'cod') {
-            return {
-                success: true,
-                orderNumber,
-                total,
-                message: `Order ${orderNumber} placed! Total GH₵${total.toFixed(2)} (incl. GH₵${shippingCost.toFixed(2)} delivery). Cash on delivery — our team will confirm.`,
-            };
-        }
-
-        // Moolre Mobile Money flow
-        const moolreApiUser = process.env.MOOLRE_API_USER;
-        const moolreApiPubkey = process.env.MOOLRE_API_PUBKEY;
-        const moolreAccountNumber = process.env.MOOLRE_ACCOUNT_NUMBER;
-
-        if (!moolreApiUser || !moolreApiPubkey || !moolreAccountNumber) {
-            return {
-                success: true,
-                orderNumber,
-                total,
-                message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but Moolre is not configured on this site. Please complete checkout from the cart page or contact ${SUPPORT_EMAIL}.`,
-            };
-        }
-
-        const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
-        const uniqueRef = `${orderNumber}-R${Date.now()}`;
-        const payload: Record<string, unknown> = {
-            type: 1,
-            amount: total.toString(),
-            email: process.env.MOOLRE_MERCHANT_EMAIL || sanitizedShipping.email,
-            externalref: uniqueRef,
-            callback: `${baseUrl}/api/payment/moolre/callback`,
-            redirect: `${baseUrl}/order-success?order=${encodeURIComponent(orderNumber)}&payment_success=true`,
-            reusable: '0',
-            currency: 'GHS',
-            accountnumber: moolreAccountNumber,
-            metadata: {
-                customer_email: sanitizedShipping.email,
-                original_order_number: orderNumber,
-            },
-        };
-        if (process.env.MOOLRE_CALLBACK_SECRET) {
-            payload.secret = process.env.MOOLRE_CALLBACK_SECRET;
-        }
-
+        let order: Record<string, unknown>;
         try {
-            const response = await fetch('https://api.moolre.com/embed/link', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-USER': moolreApiUser,
-                    'X-API-PUBKEY': moolreApiPubkey,
-                },
-                body: JSON.stringify(payload),
+            order = await createOrderFromCheckout({
+                userId: userId || null,
+                orderNumber,
+                trackingNumber,
+                shippingData: sanitizedShipping as unknown as Record<string, string>,
+                deliveryMethod: deliveryMethod === 'pickup' ? 'pickup' : 'doorstep',
+                paymentMethod: 'moolre',
+                paymentOption: 'full',
+                cart,
+                shippingCost: 0,
+                tax: 0,
             });
-
-            const result = await response.json();
-
-            if (result.status === 1 && result.data?.authorization_url) {
-                return {
-                    success: true,
-                    orderNumber,
-                    total,
-                    paymentUrl: result.data.authorization_url,
-                    message: `Order ${orderNumber} is ready. Total GH₵${total.toFixed(2)} (incl. GH₵${shippingCost.toFixed(2)} delivery). Complete Mobile Money payment with the secure Moolre link below.`,
-                };
+        } catch (orderErr: unknown) {
+            if (orderErr instanceof ApiError) {
+                return { success: false, message: orderErr.message };
             }
-
-            return {
-                success: true,
-                orderNumber,
-                total,
-                message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but we could not open Moolre. Try paying from your cart or contact ${SUPPORT_EMAIL}.`,
-            };
-        } catch (payErr: unknown) {
-            console.error('[ChatTools] Moolre payment error:', payErr);
-            return {
-                success: true,
-                orderNumber,
-                total,
-                message: `Order ${orderNumber} created (GH₵${total.toFixed(2)}), but the payment link failed. Use checkout on the site.`,
-            };
+            throw orderErr;
         }
+
+        const total = Number(order.total) || 0;
+        const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
+        const deliveryNote =
+            deliveryMethod === 'pickup'
+                ? 'Free store pickup.'
+                : 'We will contact you with the delivery cost.';
+
+        return {
+            success: true,
+            orderNumber,
+            total,
+            paymentUrl: `${baseUrl}/pay/${encodeURIComponent(orderNumber)}`,
+            message: `Order ${orderNumber} is ready. Total GH₵${total.toFixed(2)}. ${deliveryNote} Pay with Mobile Money using the secure link below.`,
+        };
     } catch (err: any) {
         console.error('[ChatTools] createChatOrder:', err);
         return { success: false, message: 'Something went wrong. Please use the checkout page on the website.' };

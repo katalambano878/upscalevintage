@@ -14,8 +14,28 @@ const ALLOWED = new Set([
   'image/png',
   'image/webp',
   'image/gif',
-  'image/svg+xml',
 ]);
+
+/**
+ * The real image type from the file's first bytes. The browser-supplied type
+ * and filename can say anything; SVG is refused because an SVG can carry
+ * script that would run on this site's origin.
+ */
+function sniffImage(buf: Buffer): { contentType: string; ext: string } | null {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return { contentType: 'image/jpeg', ext: '.jpg' };
+  }
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return { contentType: 'image/png', ext: '.png' };
+  }
+  if (buf.length >= 6 && (buf.subarray(0, 6).toString('ascii') === 'GIF87a' || buf.subarray(0, 6).toString('ascii') === 'GIF89a')) {
+    return { contentType: 'image/gif', ext: '.gif' };
+  }
+  if (buf.length >= 12 && buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WEBP') {
+    return { contentType: 'image/webp', ext: '.webp' };
+  }
+  return null;
+}
 
 function uploadRoot() {
   return process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
@@ -26,16 +46,6 @@ function publicBase() {
     process.env.NEXT_PUBLIC_UPLOAD_BASE_URL ||
     `${(process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '')}/uploads`;
   return base.replace(/\/+$/, '');
-}
-
-function extFor(contentType: string, originalName: string) {
-  const fromName = path.extname(originalName || '').toLowerCase();
-  if (fromName && fromName.length <= 8) return fromName;
-  if (contentType.includes('png')) return '.png';
-  if (contentType.includes('webp')) return '.webp';
-  if (contentType.includes('gif')) return '.gif';
-  if (contentType.includes('svg')) return '.svg';
-  return '.jpg';
 }
 
 export async function POST(request: Request) {
@@ -54,18 +64,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'File too large (max 12MB)' }, { status: 400 });
     }
 
-    let contentType = blob.type || 'application/octet-stream';
-    if (!ALLOWED.has(contentType) && !contentType.startsWith('image/')) {
-      return NextResponse.json({ error: 'Only image uploads are allowed' }, { status: 400 });
+    const raw = Buffer.from(await blob.arrayBuffer());
+    const sniffed = sniffImage(raw);
+    if (!sniffed || !ALLOWED.has(sniffed.contentType)) {
+      return NextResponse.json(
+        { error: 'Only JPG, PNG, WebP or GIF images can be uploaded.' },
+        { status: 400 }
+      );
     }
 
-    const raw = Buffer.from(await blob.arrayBuffer());
-    const compressed = await compressImageBuffer(raw, contentType);
+    const compressed = await compressImageBuffer(raw, sniffed.contentType);
     const buffer = Buffer.from(compressed.buffer);
-    contentType = compressed.contentType;
+    const finalType = sniffImage(buffer) || sniffed;
+    const contentType = finalType.contentType;
 
     const folder = String(form.get('folder') || 'products').replace(/[^a-z0-9_-]/gi, '') || 'products';
-    const ext = extFor(contentType, blob.name);
+    const ext = finalType.ext;
     const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext}`;
     const relative = path.posix.join(folder, filename);
     const absDir = path.join(uploadRoot(), folder);

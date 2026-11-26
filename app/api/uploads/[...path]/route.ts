@@ -54,6 +54,10 @@ export async function GET(_request: Request, context: Ctx) {
       headers: {
         'Content-Type': contentTypeFor(abs),
         'Cache-Control': 'public, max-age=31536000, immutable',
+        // Uploaded files are shown as images only. If one is opened directly,
+        // nothing in it may run (this matters for older SVG uploads).
+        'Content-Security-Policy': "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (err: unknown) {

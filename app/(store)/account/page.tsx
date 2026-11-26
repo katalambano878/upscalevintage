@@ -36,6 +36,7 @@ function AccountContent() {
 
   // Password Form States
   const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
     password: '',
     confirmPassword: ''
   });
@@ -45,20 +46,20 @@ function AccountContent() {
   useEffect(() => {
     async function checkUser() {
       try {
-        const me = await apiData<{ user: { id: string; email: string; full_name?: string } | null }>(
-          '/api/auth/me'
-        );
+        const me = await apiData<{
+          user: { id: string; email: string; fullName?: string | null; phone?: string | null } | null;
+        }>('/api/auth/me');
         if (!me.user) {
           router.push('/auth/login');
           return;
         }
-        const names = (me.user.full_name || '').split(' ');
+        const names = (me.user.fullName || '').split(' ');
         setUser(me.user);
         setProfileData({
           firstName: names[0] || '',
           lastName: names.slice(1).join(' ') || '',
           email: me.user.email || '',
-          phone: '',
+          phone: me.user.phone || '',
         });
       } catch {
         router.push('/auth/login');
@@ -100,8 +101,19 @@ function AccountContent() {
       setPasswordMessage({ type: 'error', text: 'Passwords do not match' });
       return;
     }
-    if (passwordData.password.length < 6) {
-      setPasswordMessage({ type: 'error', text: 'Password must be at least 6 characters' });
+    if (!passwordData.currentPassword) {
+      setPasswordMessage({ type: 'error', text: 'Enter your current password' });
+      return;
+    }
+    if (
+      passwordData.password.length < 8 ||
+      !/[a-zA-Z]/.test(passwordData.password) ||
+      !/[0-9]/.test(passwordData.password)
+    ) {
+      setPasswordMessage({
+        type: 'error',
+        text: 'Use at least 8 characters with at least one letter and one number',
+      });
       return;
     }
 
@@ -111,10 +123,10 @@ function AccountContent() {
     try {
       await apiData('/api/auth/profile', {
         method: 'PATCH',
-        json: { password: passwordData.password },
+        json: { password: passwordData.password, current_password: passwordData.currentPassword },
       });
       setPasswordMessage({ type: 'success', text: 'Password updated successfully!' });
-      setPasswordData({ password: '', confirmPassword: '' });
+      setPasswordData({ currentPassword: '', password: '', confirmPassword: '' });
     } catch (err: unknown) {
       setPasswordMessage({
         type: 'error',
@@ -138,21 +150,6 @@ function AccountContent() {
       </div>
     );
   }
-
-  const quickActions = [
-    {
-      icon: 'ri-medal-line',
-      title: 'Loyalty Program',
-      description: 'Earn points and rewards',
-      link: '/loyalty'
-    },
-    {
-      icon: 'ri-user-add-line',
-      title: 'Refer & Earn',
-      description: 'Invite friends and earn rewards',
-      link: '/referral'
-    }
-  ];
 
   const securityOptions = [
     {
@@ -335,6 +332,20 @@ function AccountContent() {
                       )}
 
                       <form onSubmit={handleChangePassword} className="space-y-5">
+                        <div className="space-y-2 md:max-w-[calc(50%-0.75rem)]">
+                          <label htmlFor="current-password" className="text-sm font-semibold text-gray-900">Current Password</label>
+                          <div className="relative">
+                            <i className="ri-key-2-line absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true"></i>
+                            <input
+                              id="current-password"
+                              type="password"
+                              autoComplete="current-password"
+                              value={passwordData.currentPassword}
+                              onChange={e => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                              className="w-full pl-11 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-store-primary/20 focus:border-store-primary transition-all bg-gray-50 focus:bg-white"
+                            />
+                          </div>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="space-y-2">
                             <label className="text-sm font-semibold text-gray-900">New Password</label>

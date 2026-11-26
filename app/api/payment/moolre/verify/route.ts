@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { applyCouponUsageForOrder } from '@/lib/coupons';
-import { sendOrderConfirmation } from '@/lib/notifications';
+import { runAfterPayment } from '@/lib/payment/after-payment';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
 import { resolveMoolreExternalRefForOrder, verifyMoolrePayment } from '@/lib/payment/moolre';
 import { getChargeAmountForOrder } from '@/lib/payment/plan';
@@ -35,7 +34,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: 'Missing or invalid orderNumber' }, { status: 400 });
     }
 
-    if (!/^ORD-\d+-\d+$/.test(orderNumber)) {
+    if (!/^ORD-[A-Z0-9]+-[A-Z0-9]+$/i.test(orderNumber)) {
       return NextResponse.json({ success: false, message: 'Invalid order number format' }, { status: 400 });
     }
 
@@ -90,8 +89,6 @@ export async function POST(req: Request) {
     }
 
     const chargedAmount = apiCheck.amount ?? expectedCharge;
-    const prevStatus = order.payment_status;
-    const wasAlreadyConfirmed = meta.confirmation_sent_at;
     const paidRow = await queryOne<{ result: OrderJson }>(
       `SELECT record_order_payment($1, $2, $3) AS result`,
       [orderNumber, externalRef, chargedAmount]
@@ -102,43 +99,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: 'Failed to update order' }, { status: 500 });
     }
 
-    if (
-      (orderJson.payment_status === 'paid' || orderJson.payment_status === 'partially_paid') &&
-      prevStatus !== 'paid' &&
-      prevStatus !== 'partially_paid'
-    ) {
-      try {
-        await applyCouponUsageForOrder(orderJson);
-      } catch (couponErr: unknown) {
-        console.error('[Verify] Coupon usage failed:', couponErr);
-      }
-    }
-
-    if (orderJson.payment_status === 'paid' && orderJson.email && prevStatus !== 'paid') {
-      try {
-        await query(`SELECT update_customer_stats($1, $2)`, [
-          String(orderJson.email),
-          Number(orderJson.total),
-        ]);
-      } catch (statsError: unknown) {
-        console.error('[Verify] Customer stats failed:', statsError);
-      }
-    }
-
-    if (
-      !wasAlreadyConfirmed &&
-      (orderJson.payment_status === 'paid' || orderJson.payment_status === 'partially_paid')
-    ) {
-      try {
-        await sendOrderConfirmation(orderJson);
-        await query(
-          `UPDATE orders SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb WHERE order_number = $1`,
-          [orderNumber, JSON.stringify({ confirmation_sent_at: new Date().toISOString() })]
-        );
-      } catch (notifyError: unknown) {
-        console.error('[Verify] Notification failed:', notifyError);
-      }
-    }
+    await runAfterPayment(orderJson, 'Verify');
 
     return NextResponse.json({
       success: true,

@@ -101,10 +101,8 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
         json: {
           status: statusToUpdate,
           notes: adminNotes,
-          metadata: {
-            ...order.metadata,
-            tracking_number: trackingNumber,
-          },
+          // Send only what changed; the server merges it into the order's metadata.
+          metadata: { tracking_number: trackingNumber },
         },
       });
 
@@ -373,9 +371,9 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                 {order.order_items?.map((item: any) => (
                   <div key={item.id} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg">
                     <div className="w-20 h-20 bg-white rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center relative">
-                      {item.products?.product_images?.[0]?.url ? (
+                      {item.products?.product_images?.[0]?.url || item.metadata?.image ? (
                         <img
-                          src={item.products.product_images[0].url}
+                          src={item.products?.product_images?.[0]?.url || item.metadata?.image}
                           alt={item.product_name}
                           className="w-full h-full object-cover"
                         />
@@ -386,7 +384,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 mb-1">{item.product_name}</h3>
                       <p className="text-sm text-gray-600 mb-1">{item.variant_name}</p>
-                      <p className="text-xs text-gray-500">SKU: {item.sku}</p>
+                      {item.sku && <p className="text-xs text-gray-500">SKU: {item.sku}</p>}
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-gray-900 mb-1">GH₵ {money(item.unit_price)}</p>

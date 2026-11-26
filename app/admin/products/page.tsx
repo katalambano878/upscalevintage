@@ -177,7 +177,7 @@ export default function ProductsPage() {
   const handleDeleteProduct = async (productId: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
     try {
-      await apiDelete(`/api/catalog/products/${productId}`);
+      await apiData(`/api/catalog/products/${productId}`, { method: 'DELETE' });
       setProducts(products.filter((p) => p.id !== productId));
       alert('Product deleted successfully');
     } catch (err: unknown) {
@@ -188,14 +188,16 @@ export default function ProductsPage() {
   const handleBulkDelete = async () => {
     if (!confirm(`Are you sure you want to delete ${selectedProducts.length} product(s)?`)) return;
     const failed: string[] = [];
+    const deleted = new Set<string>();
     for (const productId of selectedProducts) {
       try {
-        await apiDelete(`/api/catalog/products/${productId}`);
+        await apiData(`/api/catalog/products/${productId}`, { method: 'DELETE' });
+        deleted.add(productId);
       } catch {
         failed.push(products.find((p) => p.id === productId)?.name || productId.slice(0, 8));
       }
     }
-    setProducts(products.filter((p) => !selectedProducts.includes(p.id)));
+    setProducts(products.filter((p) => !deleted.has(p.id)));
     setSelectedProducts([]);
     if (failed.length) {
       alert(`Deleted ${selectedProducts.length - failed.length}. Failed: ${failed.join(', ')}`);
@@ -222,13 +224,22 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Products</h1>
           <p className="text-gray-600 mt-1">Manage your product catalog and inventory</p>
         </div>
-        <Link
-          href="/admin/products/new"
-          className="px-6 py-3 bg-store-navy hover:bg-store-navy text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center md:items-start"
-        >
-          <i className="ri-add-line mr-2"></i>
-          Add Product
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Link
+            href="/admin/products/import"
+            className="px-6 py-3 border-2 border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center"
+          >
+            <i className="ri-upload-line mr-2"></i>
+            Import CSV
+          </Link>
+          <Link
+            href="/admin/products/new"
+            className="px-6 py-3 bg-store-navy hover:bg-store-navy text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center md:items-start"
+          >
+            <i className="ri-add-line mr-2"></i>
+            Add Product
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

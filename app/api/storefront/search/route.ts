@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { getSalesActive } from '@/lib/data/products';
+import { applyStorefrontPricing } from '@/lib/pricing';
 
 function escapeIlike(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
@@ -65,7 +67,10 @@ export async function GET(request: Request) {
       rows = await fetchProducts(q, limit, false);
     }
 
-    const payload = rows.map((p) => ({
+    const salesActive = await getSalesActive();
+    const payload = rows.map((row) => {
+      const p = applyStorefrontPricing(row, salesActive);
+      return {
       id: p.id,
       name: p.name,
       slug: p.slug,
@@ -80,7 +85,8 @@ export async function GET(request: Request) {
             ? (p.product_images as unknown as { url: string | null; position: number | null }[])
             : null
       ),
-    }));
+      };
+    });
 
     return NextResponse.json(payload, {
       headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },

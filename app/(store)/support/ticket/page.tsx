@@ -3,8 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
 
 export default function SupportTicketPage() {
@@ -16,11 +14,12 @@ export default function SupportTicketPage() {
     category: 'order',
     priority: 'normal',
     subject: '',
-    description: '',
-    attachments: [] as File[]
+    description: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [ticketNumber, setTicketNumber] = useState<number | null>(null);
+  const [submitError, setSubmitError] = useState('');
   const { getToken } = useRecaptcha();
 
   const categories = [
@@ -35,6 +34,7 @@ export default function SupportTicketPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError('');
     setIsSubmitting(true);
 
     // reCAPTCHA verification
@@ -45,28 +45,34 @@ export default function SupportTicketPage() {
       return;
     }
     
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setShowSuccess(true);
-      setTimeout(() => {
-        router.push('/support/tickets');
-      }, 2000);
-    }, 1500);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFormData({
-        ...formData,
-        attachments: Array.from(e.target.files)
+    try {
+      const res = await fetch('/api/support/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          orderNumber: formData.orderNumber,
+          category: formData.category,
+          priority: formData.priority,
+          subject: formData.subject,
+          description: formData.description,
+        }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not create your ticket.');
+      setTicketNumber(data.ticketNumber ?? null);
+      setShowSuccess(true);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Could not create your ticket.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   if (showSuccess) {
     return (
       <>
-        <Header />
         <main className="min-h-screen bg-gray-50 flex items-center justify-center py-12">
           <div className="max-w-md mx-auto px-4 text-center">
             <div className="bg-white rounded-xl shadow-lg p-8">
@@ -78,7 +84,7 @@ export default function SupportTicketPage() {
                 Your support ticket has been submitted successfully.
               </p>
               <p className="text-sm text-gray-500 mb-6">
-                Ticket #TKT-2024-{Math.floor(Math.random() * 10000)}
+                {ticketNumber != null ? `Ticket #${ticketNumber}` : null}
               </p>
               <div className="space-y-3">
                 <p className="text-sm text-gray-600">
@@ -100,14 +106,12 @@ export default function SupportTicketPage() {
             </div>
           </div>
         </main>
-        <Footer />
       </>
     );
   }
 
   return (
     <>
-      <Header />
       <main className="min-h-screen bg-gray-50 py-12">
         <div className="max-w-4xl mx-auto px-4">
           <Link
@@ -281,43 +285,15 @@ export default function SupportTicketPage() {
                 </p>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Attachments (optional)
-                </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                  <input
-                    type="file"
-                    onChange={handleFileChange}
-                    multiple
-                    accept="image/*,.pdf"
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  <label
-                    htmlFor="file-upload"
-                    className="cursor-pointer"
-                  >
-                    <i className="ri-upload-cloud-line text-4xl text-gray-400 mb-2"></i>
-                    <p className="text-gray-900 font-semibold mb-1">
-                      Click to upload files
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      PNG, JPG, PDF up to 10MB
-                    </p>
-                  </label>
-                  {formData.attachments.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      {formData.attachments.map((file, index) => (
-                        <div key={index} className="flex items-center justify-center space-x-2 text-sm text-gray-600">
-                          <i className="ri-file-line"></i>
-                          <span>{file.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <p className="text-sm text-gray-600">
+                Have photos of the problem? Send them to us on WhatsApp with your ticket number after you submit.
+              </p>
+
+              {submitError && (
+                <p role="alert" className="text-sm text-red-600">
+                  {submitError}
+                </p>
+              )}
 
               <div className="flex space-x-4 pt-6">
                 <button
@@ -361,7 +337,6 @@ export default function SupportTicketPage() {
           </div>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

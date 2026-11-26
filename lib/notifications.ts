@@ -6,6 +6,11 @@ import { formatDeliveryMethod, resolveDeliveryMethod } from '@/lib/delivery';
 
 const resend = new Resend(process.env.RESEND_API_KEY || 'missing_api_key');
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || ADMIN_EMAIL_DEFAULT;
+
+/** Sends a plain notice to the shop's admin inbox. */
+export async function notifyAdmin(subject: string, bodyHtml: string) {
+    return sendEmail({ to: ADMIN_EMAIL, subject, html: emailLayout(bodyHtml, subject) });
+}
 const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_FROM_DEFAULT;
 const BRAND = {
     name: APP_TITLE,
@@ -89,6 +94,10 @@ function maskPhone(phone: string): string {
 }
 
 export async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
+    // Till sales without a real email use placeholders like 0241234567@pos.local.
+    if (!to || /@[^@]*\.local$/i.test(to.trim())) {
+        return null;
+    }
     if (!process.env.RESEND_API_KEY) {
         console.warn('[Email] RESEND_API_KEY not configured');
         return null;

@@ -17,6 +17,7 @@ import {
 import {
   clearAppliedCoupon,
   readAppliedCoupon,
+  couponDiscountFor,
   type AppliedCoupon,
 } from '@/lib/coupon-session';
 
@@ -119,7 +120,7 @@ export default function CheckoutPage() {
   const subtotal = cartSubtotal;
   const shippingCost = appliedCoupon?.freeShipping ? 0 : 0; // Delivery options temporarily disabled
   const tax = 0; // No Tax
-  const couponDiscount = appliedCoupon?.discount || 0;
+  const couponDiscount = couponDiscountFor(appliedCoupon, subtotal);
   const total = Math.max(0, subtotal + shippingCost + tax - couponDiscount);
 
   const validateShipping = () => {
@@ -167,11 +168,6 @@ export default function CheckoutPage() {
     }
 
     try {
-      const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      // Generate tracking number: SLI-XXXXXX (6-char alphanumeric)
-      const trackingId = Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
-      const trackingNumber = `SLI-${trackingId}`;
-
       const cartPayload = cart.map((item) => ({
         id: item.id,
         name: item.name,
@@ -181,21 +177,23 @@ export default function CheckoutPage() {
         image: item.image,
       }));
 
-      const order = await apiData<Record<string, unknown>>('/api/orders', {
+      const order = await apiData<{ order_number: string } & Record<string, unknown>>('/api/orders', {
         method: 'POST',
         json: {
-          orderNumber,
-          trackingNumber,
           shippingData,
           deliveryMethod,
           paymentMethod,
           paymentOption: 'full',
           cart: cartPayload,
-          shippingCost,
-          tax,
-          couponCode: appliedCoupon?.code || null,
+          // Leave out a coupon the cart no longer qualifies for (below its minimum).
+          couponCode:
+            appliedCoupon && (appliedCoupon.type === 'free_shipping' || couponDiscount > 0)
+              ? appliedCoupon.code
+              : null,
         },
       });
+
+      const orderNumber = order.order_number;
 
       // Persist address book when logged in and checkbox is on (or first address)
       if (user && (saveAddress || savedAddresses.length === 0)) {
@@ -235,10 +233,18 @@ export default function CheckoutPage() {
           return;
 
         } catch (paymentErr: any) {
+          // The order already exists. Send the shopper to its pay page to retry,
+          // so pressing Pay again here does not create a second order.
           console.error('Payment Error:', paymentErr);
-          alert('Failed to initialize payment: ' + paymentErr.message);
-          setIsLoading(false);
-          return; // Stop execution
+          clearCart();
+          clearAppliedCoupon();
+          alert(
+            'Your order was saved, but the payment page could not open: ' +
+              (paymentErr?.message || 'please try again') +
+              '. You can try paying again on the next page.'
+          );
+          router.push(`/pay/${encodeURIComponent(orderNumber)}`);
+          return;
         }
       }
 

@@ -55,14 +55,15 @@ function ContactForm() {
     }
 
     try {
-      await fetch('/api/notifications', {
+      const res = await fetch('/api/notifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'contact',
-          payload: formData
+          payload: { ...formData, subject: formData.subject.trim() || 'General enquiry' }
         })
-      }).catch(err => console.error('Contact notification error:', err));
+      });
+      if (!res.ok) throw new Error('Message not sent');
 
       setSubmitStatus('success');
       setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
