@@ -65,16 +65,32 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
           productData.price
         );
 
+        const images: string[] =
+          productData.product_images
+            ?.slice()
+            .sort((a: { position?: number }, b: { position?: number }) => (a.position ?? 0) - (b.position ?? 0))
+            .map((img: { url: string }) => img.url)
+            .filter(Boolean) || [];
+
+        // metadata.color_images maps a colour option to the photos that show it,
+        // so swiping the gallery can name the colour and select it.
+        const colorImages: Record<string, unknown> =
+          productData.metadata?.color_images && typeof productData.metadata.color_images === 'object'
+            ? productData.metadata.color_images
+            : {};
+        const imageColors = images.map((url) => {
+          const match = Object.entries(colorImages).find(
+            ([color, urls]) => colors.includes(color) && Array.isArray(urls) && urls.includes(url)
+          );
+          return match ? match[0] : '';
+        });
+
         const transformedProduct = {
           ...productData,
           price: asNumber(productData.price),
           compare_at_price: productData.compare_at_price != null ? asNumber(productData.compare_at_price) : null,
-          images:
-            productData.product_images
-              ?.slice()
-              .sort((a: { position?: number }, b: { position?: number }) => (a.position ?? 0) - (b.position ?? 0))
-              .map((img: { url: string }) => img.url)
-              .filter(Boolean) || [],
+          images,
+          imageColors,
           category: productData.categories?.name || 'Shop',
           rating: asNumber(productData.rating_avg),
           reviewCount: productData.review_count || 0,
@@ -195,7 +211,8 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
     if (resolvedVariant) {
       const color = resolvedVariant.color || selectedColor || '';
       const name = resolvedVariant.name || '';
-      variantLabel = color && name ? `${color} / ${name}` : color || name || undefined;
+      // Colour-only options are stored with name = colour; don't label them "Red / Red".
+      variantLabel = color && name && name !== color ? `${color} / ${name}` : color || name || undefined;
     }
 
     addToCart({
@@ -258,8 +275,26 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
 
   const isWishlisted = isInWishlist(product.id);
   const imageCount = product.images.length;
-  const showPreviousImage = () => setSelectedImage((current: number) => Math.max(0, current - 1));
-  const showNextImage = () => setSelectedImage((current: number) => Math.min(imageCount - 1, current + 1));
+  const imageColors: string[] = product.imageColors || [];
+  const currentImageColor = imageColors[selectedImage] || '';
+  const colorOnly = hasColors && product.variants.every((v: StorefrontVariant) => v.name === v.color);
+  const colorPrice = (color: string) =>
+    product.variants.find((v: StorefrontVariant) => v.color === color)?.price ?? product.price;
+
+  const chooseColor = (color: string) => {
+    setSelectedColor(color);
+    const matching = product.variants.filter((v: StorefrontVariant) => v.color === color);
+    setSelectedSize(matching.length === 1 ? matching[0].name : '');
+  };
+  // Moving to a photo of a colour selects that colour, so what's shown is what's bought.
+  const goToImage = (index: number) => {
+    const next = Math.max(0, Math.min(imageCount - 1, index));
+    setSelectedImage(next);
+    const color = imageColors[next];
+    if (color && color !== selectedColor) chooseColor(color);
+  };
+  const showPreviousImage = () => goToImage(selectedImage - 1);
+  const showNextImage = () => goToImage(selectedImage + 1);
 
   const siteUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://upscalevintage.shop').replace(/\/+$/, '');
   const breadcrumbSchema = generateBreadcrumbSchema([
@@ -313,7 +348,7 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                 >
                   <Image
                     src={product.images[selectedImage]}
-                    alt={product.name}
+                    alt={currentImageColor ? `${product.name} in ${currentImageColor}` : product.name}
                     fill
                     className="object-cover object-center"
                     sizes="(max-width: 1024px) 100vw, 50vw"
@@ -353,12 +388,26 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                   )}
                 </div>
 
+                {currentImageColor && (
+                  <p className="-mt-1 mb-4 flex items-start gap-2 text-sm text-gray-700" aria-live="polite">
+                    <span
+                      className="mt-[3px] w-3.5 h-3.5 rounded-full border border-gray-300 flex-shrink-0"
+                      style={{ backgroundColor: product.colorHexMap?.[currentImageColor] || colorNameToHex(currentImageColor) }}
+                      aria-hidden="true"
+                    />
+                    <span>
+                      <span className="font-medium text-gray-900">{currentImageColor}</span>
+                      <span className="whitespace-nowrap tabular-nums"> · GH₵{money(colorPrice(currentImageColor))}</span>
+                    </span>
+                  </p>
+                )}
+
                 {product.images.length > 1 && (
                   <div className="grid grid-cols-4 gap-4">
                     {product.images.map((image: string, index: number) => (
                       <button
                         key={index}
-                        onClick={() => setSelectedImage(index)}
+                        onClick={() => goToImage(index)}
                         className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${selectedImage === index ? 'border-store-navy shadow-md' : 'border-gray-200 hover:border-gray-300'
                           }`}
                       >
@@ -456,16 +505,12 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                             key={color}
                             type="button"
                             onClick={() => {
-                              setSelectedColor(color);
-                              const matching = product.variants.filter((v: StorefrontVariant) => v.color === color);
-                              if (matching.length === 1) {
-                                setSelectedSize(matching[0].name);
-                              } else {
-                                setSelectedSize('');
-                              }
+                              chooseColor(color);
+                              const firstPhoto = imageColors.indexOf(color);
+                              if (firstPhoto >= 0 && currentImageColor !== color) setSelectedImage(firstPhoto);
                             }}
                             disabled={isOutOfStock}
-                            className={`px-5 py-2.5 rounded-full border-2 font-medium transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+                            className={`px-5 py-2.5 rounded-full border-2 font-medium transition-all max-w-full text-left cursor-pointer flex items-center gap-2 ${
                               isSelected
                                 ? 'border-store-navy bg-store-surface text-store-primary shadow-sm'
                                 : isOutOfStock
@@ -486,7 +531,7 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                 )}
 
                 {/* Size / type selector */}
-                {hasVariants && sizeOptions.length > 0 && (
+                {hasVariants && sizeOptions.length > 0 && !colorOnly && (
                   <div className="mb-8">
                     <label className="block font-semibold text-gray-900 mb-3">
                       {hasColors ? 'Size' : 'Variant'}:{' '}

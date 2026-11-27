@@ -85,8 +85,10 @@ export async function PATCH(request: Request, context: Ctx) {
         sets.push(`${key} = $${i}::product_status`);
         params.push(['active', 'draft', 'archived'].includes(nextStatus) ? nextStatus : 'draft');
       } else if (key === 'metadata') {
-        sets.push(`${key} = $${i}::jsonb`);
-        params.push(JSON.stringify(fields[key]));
+        // Merge so keys the admin form doesn't send (e.g. color_images) survive a save.
+        sets.push(`${key} = COALESCE(${key}, '{}'::jsonb) || $${i}::jsonb`);
+        const meta = fields[key];
+        params.push(JSON.stringify(meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {}));
       } else if (key === 'category_id') {
         const nextCategory = fields[key];
         sets.push(`${key} = $${i}::uuid`);
