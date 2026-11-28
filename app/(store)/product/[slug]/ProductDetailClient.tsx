@@ -278,6 +278,15 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
   const imageColors: string[] = product.imageColors || [];
   const currentImageColor = imageColors[selectedImage] || '';
   const colorOnly = hasColors && product.variants.every((v: StorefrontVariant) => v.name === v.color);
+  // products.options can rename the pickers: [{ "field": "color" | "size", "name": "Style" }]
+  const optionName = (field: 'color' | 'size') => {
+    const found = Array.isArray(product.options)
+      ? product.options.find((o: any) => o && o.field === field && typeof o.name === 'string' && o.name.trim())
+      : null;
+    return found ? String(found.name).trim() : '';
+  };
+  const colorLabel = optionName('color') || 'Color';
+  const sizeLabel = optionName('size') || (hasColors ? 'Size' : 'Variant');
   const colorPrice = (color: string) =>
     product.variants.find((v: StorefrontVariant) => v.color === color)?.price ?? product.price;
 
@@ -487,11 +496,11 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                 {hasVariants && hasColors && (
                   <div className="mb-6">
                     <label className="block font-semibold text-gray-900 mb-3">
-                      Color:{' '}
+                      {colorLabel}:{' '}
                       {selectedColor ? (
                         <span className="text-store-primary font-normal">{selectedColor}</span>
                       ) : (
-                        <span className="text-red-500 font-normal text-sm">Please select a color</span>
+                        <span className="text-red-500 font-normal text-sm">Please select a {colorLabel.toLowerCase()}</span>
                       )}
                     </label>
                     <div className="flex flex-wrap gap-3">
@@ -534,7 +543,7 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                 {hasVariants && sizeOptions.length > 0 && !colorOnly && (
                   <div className="mb-8">
                     <label className="block font-semibold text-gray-900 mb-3">
-                      {hasColors ? 'Size' : 'Variant'}:{' '}
+                      {sizeLabel}:{' '}
                       {resolvedVariant ? (
                         <span className="text-store-primary font-normal">
                           {resolvedVariant.name} — GH₵{money(resolvedVariant.price)}
@@ -632,9 +641,9 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
                       {activeStock === 0
                         ? 'Out of Stock'
                         : needsColorSelection
-                          ? 'Select a Color'
+                          ? `Select a ${colorLabel}`
                           : needsSizeSelection
-                            ? 'Select a Size'
+                            ? `Select a ${sizeLabel}`
                             : needsVariantSelection
                               ? 'Select a Variant'
                               : 'Add to Cart'}
